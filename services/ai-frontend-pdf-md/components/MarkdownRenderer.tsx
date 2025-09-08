@@ -1,13 +1,18 @@
 "use client";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
 import { resolveImageToApi, slugify } from '@/lib/markdown';
 
 export default function MarkdownRenderer({ content, mdRelPath }: { content: string; mdRelPath: string }) {
   return (
     <article className="prose prose-slate dark:prose-invert max-w-none">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+        rehypePlugins={[rehypeRaw, rehypeKatex]}
         components={{
           img({ node, src, alt, ...props }) {
             const finalSrc = src ? resolveImageToApi(mdRelPath, src) : undefined;
@@ -32,4 +37,3 @@ export default function MarkdownRenderer({ content, mdRelPath }: { content: stri
     </article>
   );
 }
-

@@ -1,4 +1,5 @@
 import './globals.css';
+import 'katex/dist/katex.min.css';
 import { ReactNode } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -20,4 +21,3 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     </html>
   );
 }
-
