@@ -123,18 +123,7 @@ export default function RightMarkdownPanel({
     <div className="h-full overflow-auto flex flex-col">
       <div className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-800 p-2 flex items-center justify-between">
         <div className="text-sm font-medium">Table of Contents</div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">View:</span>
-          <button
-            type="button"
-            className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
-            onClick={toggleSource}
-            aria-pressed={showSource}
-            aria-label="Toggle source/rendered view"
-          >
-            {showSource ? 'Source' : 'Rendered'}
-          </button>
-          <span className="sr-only">|</span>
+        <div className="flex items-center gap-2 w-full justify-end">
           <button
             type="button"
             className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -145,19 +134,26 @@ export default function RightMarkdownPanel({
             {showToc ? 'Hide TOC' : 'Show TOC'}
           </button>
           {showSource && (
-            <>
-              <span className="sr-only">|</span>
-              <button
-                type="button"
-                className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-                onClick={doSave}
-                disabled={!dirty || saving}
-                aria-label="Save markdown (Ctrl/Cmd+S)"
-              >
-                {saving ? 'Saving…' : dirty ? 'Save' : (saveMsg ?? 'Saved')}
-              </button>
-            </>
+            <button
+              type="button"
+              className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+              onClick={doSave}
+              disabled={!dirty || saving}
+              aria-label="Save markdown (Ctrl/Cmd+S)"
+            >
+              {saving ? 'Saving…' : dirty ? 'Save' : (saveMsg ?? 'Saved')}
+            </button>
           )}
+          <span className="text-xs text-gray-500">View:</span>
+          <button
+            type="button"
+            className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+            onClick={toggleSource}
+            aria-pressed={showSource}
+            aria-label="Toggle source/rendered view"
+          >
+            {showSource ? 'Source' : 'Rendered'}
+          </button>
         </div>
       </div>
       <div className="flex flex-1 overflow-hidden">
@@ -176,6 +172,36 @@ export default function RightMarkdownPanel({
                 ref={textareaRef}
                 value={text}
                 onChange={(e) => { setText(e.target.value); setDirty(true); setSaveErr(null); }}
+                onKeyDown={(e) => {
+                  const isMac = navigator.platform.toUpperCase().includes('MAC');
+                  const isCutLine = (isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'x';
+                  const ta = textareaRef.current;
+                  if (!isCutLine || !ta) return;
+                  const selStart = ta.selectionStart ?? 0;
+                  const selEnd = ta.selectionEnd ?? selStart;
+                  if (selStart !== selEnd) return; // let default cut selection
+                  e.preventDefault();
+                  const src = text;
+                  const beforeNL = src.lastIndexOf('\n', Math.max(0, selStart - 1));
+                  const lineStart = beforeNL === -1 ? 0 : beforeNL + 1;
+                  const nextNL = src.indexOf('\n', selStart);
+                  const hasNextNL = nextNL !== -1;
+                  const delEnd = hasNextNL ? nextNL + 1 : src.length;
+                  const newValue = src.slice(0, lineStart) + src.slice(delEnd);
+                  setText(newValue);
+                  setDirty(true);
+                  setSaveErr(null);
+                  // Restore caret near the start of deleted line position
+                  requestAnimationFrame(() => {
+                    const n = textareaRef.current;
+                    if (!n) return;
+                    n.selectionStart = n.selectionEnd = lineStart;
+                    // maintain approximate scroll position
+                    const max = Math.max(0, n.scrollHeight - n.clientHeight);
+                    const ratio = n.scrollTop / (max || 1);
+                    n.scrollTop = Math.max(0, n.scrollHeight - n.clientHeight) * ratio;
+                  });
+                }}
                 className="w-full h-full min-h-[60vh] text-sm font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Edit markdown source"
               />
