@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import { listDocs } from '@/lib/scan';
 import SearchBox from '@/components/SearchBox';
+import SortToggle from '@/components/SortToggle';
 import { Suspense } from 'react';
 
 export const dynamic = 'force-dynamic';
 
-async function DocsList({ query }: { query: string }) {
+type Order = 'asc' | 'desc';
+
+async function DocsList({ query, order }: { query: string; order: Order }) {
   let docs: Awaited<ReturnType<typeof listDocs>> = [];
   try {
     docs = await listDocs();
@@ -20,9 +23,11 @@ async function DocsList({ query }: { query: string }) {
   const filtered = q
     ? docs.filter((d) => d.id.toLowerCase().includes(q) || d.title.toLowerCase().includes(q))
     : docs;
+  const sorted = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
+  if (order === 'desc') sorted.reverse();
   return (
     <ul className="divide-y divide-gray-200 dark:divide-gray-800 rounded-md border border-gray-200 dark:border-gray-800 overflow-hidden">
-      {filtered.map((d) => (
+      {sorted.map((d) => (
         <li key={d.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800">
           <Link href={`/doc/${encodeURIComponent(d.id)}`} className="flex items-center justify-between">
             <div>
@@ -33,7 +38,7 @@ async function DocsList({ query }: { query: string }) {
           </Link>
         </li>
       ))}
-      {filtered.length === 0 && (
+      {sorted.length === 0 && (
         <li className="p-6 text-center text-sm text-gray-500">No documents match your search.</li>
       )}
     </ul>
@@ -42,13 +47,17 @@ async function DocsList({ query }: { query: string }) {
 
 export default async function Page({ searchParams }: { searchParams?: { q?: string } }) {
   const q = searchParams?.q ?? '';
+  const order = (searchParams?.order === 'asc' ? 'asc' : 'desc') as Order;
   return (
     <div className="max-w-4xl mx-auto space-y-4">
       <h1 className="text-2xl font-semibold">Documents</h1>
-      <SearchBox initialQuery={q} />
+      <div className="flex items-center gap-2">
+        <div className="flex-1"><SearchBox initialQuery={q} /></div>
+        <SortToggle />
+      </div>
       <Suspense>
         {/* @ts-expect-error Async Server Component */}
-        <DocsList query={q} />
+        <DocsList query={q} order={order} />
       </Suspense>
       <p className="text-xs text-gray-500">
         DOCS_ROOT must be configured. See README for setup.
