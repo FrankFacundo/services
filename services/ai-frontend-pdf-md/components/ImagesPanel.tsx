@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildQADocumentJson } from "@/lib/qa";
 
 function resolveRelativePath(mdRelPath: string, imgPath: string): string {
@@ -34,19 +34,39 @@ export default function ImagesPanel({
   title: string;
   mdRelPath: string;
 }) {
-  const data = useMemo(() => buildQADocumentJson(content, title), [content, title]);
+  const [currentContent, setCurrentContent] = useState(content);
+
+  useEffect(() => { setCurrentContent(content); }, [content]);
+
+  // Listen for global refresh from StatusPanel and our own save handler
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const ev = e as CustomEvent<{ mdRelPath?: string }>;
+      if (ev.detail?.mdRelPath && ev.detail.mdRelPath !== mdRelPath) return;
+      try {
+        const res = await fetch(`/api/file?path=${encodeURIComponent(mdRelPath)}`, { cache: 'no-store' });
+        const text = await res.text();
+        setCurrentContent(text);
+      } catch {}
+    };
+    window.addEventListener('doc:refresh-json' as any, handler as any);
+    return () => window.removeEventListener('doc:refresh-json' as any, handler as any);
+  }, [mdRelPath]);
+
+  const data = useMemo(() => buildQADocumentJson(currentContent, title), [currentContent, title]);
   const root = (data as any)[title] || {} as Record<string, Record<string, any>>;
 
   const items = useMemo(() => {
-    const out: { id: string; cat: string; key: string; rel: string }[] = [];
+    const out: { id: string; cat: string; key: string; rel: string; srcRef: string }[] = [];
     for (const cat of Object.keys(root)) {
       const entries = root[cat] || {};
       for (const key of Object.keys(entries)) {
         const q = entries[key] || {};
         const imgs: string[] = Array.isArray(q.Imagenes) ? q.Imagenes : [];
         for (let i = 0; i < imgs.length; i++) {
-          const rel = resolveRelativePath(mdRelPath, imgs[i]);
-          out.push({ id: `${cat}/${key}/${i}`, cat, key, rel });
+          const srcRef = imgs[i];
+          const rel = resolveRelativePath(mdRelPath, srcRef);
+          out.push({ id: `${cat}/${key}/${i}`, cat, key, rel, srcRef });
         }
       }
     }
@@ -74,6 +94,26 @@ export default function ImagesPanel({
     }
   };
 
+  const saveGenerated = async (id: string, rel: string, srcRef: string) => {
+    const s = gen[id];
+    if (!s?.dataUrl) return;
+    const b64 = s.dataUrl.split(',')[1] || '';
+    setGen((m) => ({ ...m, [id]: { ...(m[id] || {}), loading: true, error: null } }));
+    try {
+      const res = await fetch('/api/gemini/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: rel, mdPath: mdRelPath, srcRef, data: b64, mimeType: s.mimeType }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to save');
+      setGen((m) => ({ ...m, [id]: { ...(m[id] || {}), loading: false } }));
+      try { window.dispatchEvent(new CustomEvent('doc:refresh-json', { detail: { mdRelPath } })); } catch {}
+    } catch (e: any) {
+      setGen((m) => ({ ...m, [id]: { ...(m[id] || {}), loading: false, error: e?.message || 'Failed to save' } }));
+    }
+  };
+
   if (items.length === 0) {
     return (
       <div className="h-full overflow-auto p-3 text-sm text-gray-500">
@@ -84,7 +124,7 @@ export default function ImagesPanel({
 
   return (
     <div className="h-full overflow-auto p-2 space-y-3">
-      {items.map(({ id, cat, key, rel }) => {
+      {items.map(({ id, cat, key, rel, srcRef }) => {
         const origUrl = `/api/file?path=${encodeURIComponent(rel)}`;
         const s = gen[id] || { loading: false };
         return (
@@ -105,6 +145,12 @@ export default function ImagesPanel({
                   onClick={() => generate(id, rel)}
                   disabled={s.loading}
                 >{s.loading ? 'Generating…' : 'Generate'}</button>
+                <button
+                  type="button"
+                  className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                  onClick={() => saveGenerated(id, rel, srcRef)}
+                  disabled={s.loading || !s.dataUrl}
+                >Save</button>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
@@ -135,4 +181,3 @@ export default function ImagesPanel({
     </div>
   );
 }
-
