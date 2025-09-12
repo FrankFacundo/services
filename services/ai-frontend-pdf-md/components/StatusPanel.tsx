@@ -9,10 +9,13 @@ type DocStatus = {
   reviewImages: ReviewState;
 };
 
-export default function StatusPanel({ id, content, title }: { id: string; content: string; title: string }) {
+export default function StatusPanel({ id, content, title, mdRelPath }: { id: string; content?: string; title?: string; mdRelPath?: string }) {
   const [status, setStatus] = useState<DocStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [mdText, setMdText] = useState<string | undefined>(content);
+  const [mdPath, setMdPath] = useState<string | undefined>(mdRelPath);
 
   useEffect(() => {
     let mounted = true;
@@ -28,6 +31,19 @@ export default function StatusPanel({ id, content, title }: { id: string; conten
     })();
     return () => { mounted = false; };
   }, [id]);
+
+  useEffect(() => { setMdText(content); }, [content]);
+  useEffect(() => { setMdPath(mdRelPath); }, [mdRelPath]);
+
+  // Learn mdRelPath from JsonPanel if not provided explicitly
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ mdRelPath?: string; title?: string }>;
+      if (!mdPath && ev.detail?.mdRelPath) setMdPath(ev.detail.mdRelPath);
+    };
+    window.addEventListener('doc:register-json' as any, handler as any);
+    return () => window.removeEventListener('doc:register-json' as any, handler as any);
+  }, [mdPath]);
 
   const save = async (next: DocStatus) => {
     setSaving(true);
@@ -55,7 +71,10 @@ export default function StatusPanel({ id, content, title }: { id: string; conten
     'bg-red-200 text-red-900 dark:bg-red-800/50 dark:text-red-100';
 
   // Extracted JSON and diagnostics (same data source as JsonPanel)
-  const data = useMemo(() => buildQADocumentJson(content, title), [content, title]);
+  const data = useMemo(() => {
+    if (!title || !mdText) return {} as any;
+    return buildQADocumentJson(mdText, title);
+  }, [mdText, title]);
   const counts = useMemo(() => {
     const root = (data as any)[title] || {};
     let total = 0;
@@ -110,9 +129,43 @@ export default function StatusPanel({ id, content, title }: { id: string; conten
     return ordered.join(', ');
   };
 
+  const refreshAll = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      // reload status
+      const res = await fetch(`/api/status?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to load status');
+      setStatus(data.status as DocStatus);
+      // reload markdown if path provided
+      const path = mdPath;
+      if (path) {
+        const mdRes = await fetch(`/api/file?path=${encodeURIComponent(path)}`, { cache: 'no-store' });
+        const text = await mdRes.text();
+        setMdText(text);
+        // notify JSON panels to refresh themselves
+        try {
+          window.dispatchEvent(new CustomEvent('doc:refresh-json', { detail: { mdRelPath: path } }));
+        } catch {}
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to refresh');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="flex flex-wrap gap-2 items-center text-xs">
       {error && <div className="text-red-600">{error}</div>}
+      <button
+        type="button"
+        onClick={refreshAll}
+        className="px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+        disabled={refreshing}
+        title="Refresh status and re-parse JSON"
+      >{refreshing ? 'Refreshing…' : 'Refresh'}</button>
       <div className="flex items-center gap-2">
         <span>Ads/garbage removed:</span>
         <button

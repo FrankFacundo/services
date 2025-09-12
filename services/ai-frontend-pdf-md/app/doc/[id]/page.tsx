@@ -61,7 +61,7 @@ export default async function DocPage({ params }: { params: { id: string } }) {
         <div className="h-full">
           <SplitPane leftTitle="Markdown" rightTitle="JSON">
             <RightMarkdownPanel headings={headings} content={mdContent} mdRelPath={mdRel} />
-            <JsonPanel content={mdContent} title={title} />
+            <JsonPanel content={mdContent} title={title} mdRelPath={mdRel} />
           </SplitPane>
         </div>
       </SplitPane>
