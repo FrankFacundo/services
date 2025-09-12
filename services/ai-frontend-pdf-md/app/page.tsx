@@ -1,12 +1,29 @@
 import Link from 'next/link';
 import { listDocs } from '@/lib/scan';
+import { getOrCreateStatusByMdRel } from '@/lib/status';
+import type { ReviewState } from '@/lib/types';
 import SearchBox from '@/components/SearchBox';
 import SortToggle from '@/components/SortToggle';
+import InlineStatusControls from '@/components/InlineStatusControls';
 import { Suspense } from 'react';
 
 export const dynamic = 'force-dynamic';
 
 type Order = 'asc' | 'desc';
+
+function colorForBool(v: boolean) {
+  return v
+    ? 'bg-green-200 text-green-900 dark:bg-green-800/50 dark:text-green-200'
+    : 'bg-red-200 text-red-900 dark:bg-red-800/50 dark:text-red-100';
+}
+
+function colorForState(s: ReviewState) {
+  return s === 'done'
+    ? 'bg-green-200 text-green-900 dark:bg-green-800/50 dark:text-green-200'
+    : s === 'in_progress'
+    ? 'bg-yellow-200 text-yellow-900 dark:bg-yellow-800/50 dark:text-yellow-100'
+    : 'bg-red-200 text-red-900 dark:bg-red-800/50 dark:text-red-100';
+}
 
 async function DocsList({ query, order }: { query: string; order: Order }) {
   let docs: Awaited<ReturnType<typeof listDocs>> = [];
@@ -25,17 +42,26 @@ async function DocsList({ query, order }: { query: string; order: Order }) {
     : docs;
   const sorted = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
   if (order === 'desc') sorted.reverse();
+  // Load status for each doc (creates defaults if missing)
+  const withStatus = await Promise.all(
+    sorted.map(async (d) => ({ d, status: await getOrCreateStatusByMdRel(d.mdRel) }))
+  );
+
   return (
     <ul className="divide-y divide-gray-200 dark:divide-gray-800 rounded-md border border-gray-200 dark:border-gray-800 overflow-hidden">
-      {sorted.map((d) => (
+      {withStatus.map(({ d, status }) => (
         <li key={d.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800">
-          <Link href={`/doc/${encodeURIComponent(d.id)}`} className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">{d.title}</div>
-              <div className="text-xs text-gray-500">{d.id}</div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="font-medium truncate">{d.title}</div>
+              <div className="text-xs text-gray-500 truncate">{d.id}</div>
             </div>
-            <div className="text-sm text-blue-600 dark:text-blue-400">Open →</div>
-          </Link>
+            <div className="flex items-center gap-3 shrink-0">
+              {/* Inline editable status */}
+              <InlineStatusControls id={d.id} initial={status} />
+              <Link href={`/doc/${encodeURIComponent(d.id)}`} className="px-2 py-1 text-xs rounded border border-blue-500 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30">Open</Link>
+            </div>
+          </div>
         </li>
       ))}
       {sorted.length === 0 && (

@@ -2,6 +2,7 @@ import { getDocWithContent, listDocs } from '@/lib/scan';
 import SplitPane from '@/components/SplitPane';
 import nextDynamic from 'next/dynamic';
 import RightMarkdownPanel from '@/components/RightMarkdownPanel';
+import StatusPanel from '@/components/StatusPanel';
 import { extractHeadings } from '@/lib/markdown';
 import Link from 'next/link';
 
@@ -39,7 +40,9 @@ export default async function DocPage({ params }: { params: { id: string } }) {
           <h1 className="text-xl font-semibold">{title}</h1>
           <div className="text-xs text-gray-500">{docId}</div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {/* Status controls */}
+          <StatusPanel id={docId} />
           <a className="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800" href={pdfUrl} target="_blank" rel="noreferrer">Open PDF</a>
           <a className="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800" href={mdUrl} target="_blank" rel="noreferrer">Open MD</a>
           <Link className="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800" href="/">Back</Link>

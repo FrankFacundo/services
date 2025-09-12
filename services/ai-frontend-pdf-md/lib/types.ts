@@ -9,3 +9,16 @@ export type DocWithContent = DocSummary & {
   mdContent: string;
 };
 
+export type ReviewState = 'not_started' | 'in_progress' | 'done';
+
+export type DocStatus = {
+  adsRemoved: boolean;
+  reviewQuestions: ReviewState;
+  reviewImages: ReviewState;
+};
+
+export const DefaultDocStatus: DocStatus = {
+  adsRemoved: false,
+  reviewQuestions: 'not_started',
+  reviewImages: 'not_started',
+};
