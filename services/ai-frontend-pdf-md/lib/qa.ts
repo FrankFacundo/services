@@ -86,8 +86,9 @@ export function extractQADoc(markdown: string): QADoc {
 
     const cat = currentCategory;
     if (!categories[cat]) categories[cat] = {};
-    const nextIdx = (counters[cat] = (counters[cat] || 0) + 1);
-    categories[cat][String(nextIdx)] = entry;
+    // Prefer the explicit question number extracted from the heading; fallback to sequence
+    const key = (qNumber && qNumber.trim()) || String((counters[cat] = (counters[cat] || 0) + 1));
+    categories[cat][key] = entry;
 
     // reset
     qNumber = null;
