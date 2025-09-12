@@ -51,6 +51,7 @@ export type QAEntry = {
   Respuesta: string;
   Clave: string;
   Solucion?: string;
+  Imagenes?: string[];
 };
 
 export type QADoc = Record<string, Record<string, QAEntry>>; // { Category: { index: entry } }
@@ -71,6 +72,24 @@ export function extractQADoc(markdown: string): QADoc {
   let solucionLines: string[] = [];
   let clave: string | null = null;
   let explicitRespuesta: string | null = null;
+  
+  // Extract image paths from markdown or HTML img tags
+  function extractImages(text: string): string[] {
+    const result: string[] = [];
+    if (!text) return result;
+    // Markdown images: ![alt](path "title")
+    const mdImg = /!\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\"|\s+\'[^\']*\')?\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = mdImg.exec(text)) != null) {
+      if (m[1]) result.push(m[1]);
+    }
+    // HTML <img src="...">
+    const htmlImg = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+    while ((m = htmlImg.exec(text)) != null) {
+      if (m[1]) result.push(m[1]);
+    }
+    return result;
+  }
 
   function flushQuestion() {
     if (!currentCategory) return;
@@ -104,6 +123,10 @@ export function extractQADoc(markdown: string): QADoc {
       Respuesta: respuesta,
       Clave: (claveFromRespuesta || clave || "").toUpperCase(),
       Solucion: solucionLines.length ? solucionLines.join("\n") : undefined,
+      Imagenes: Array.from(new Set([
+        ...extractImages(problemLines.join("\n")),
+        ...options.flatMap((o) => extractImages(o || "")),
+      ])),
     };
 
     const cat = currentCategory;
