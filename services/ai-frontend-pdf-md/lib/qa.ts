@@ -60,13 +60,16 @@ export function extractQADoc(markdown: string): QADoc {
   let options: string[] = [];
   let solucionLines: string[] = [];
   let clave: string | null = null;
+  let explicitRespuesta: string | null = null;
 
   function flushQuestion() {
     if (!currentCategory) return;
     if (problemLines.length === 0) return;
-    // Build Respuesta from clave
+    // Build Respuesta from explicit line, then fall back to clave option
     let respuesta = "";
-    if (clave) {
+    if (explicitRespuesta && explicitRespuesta.trim()) {
+      respuesta = explicitRespuesta.trim();
+    } else if (clave) {
       const idx = clave.toUpperCase().charCodeAt(0) - "A".charCodeAt(0);
       if (idx >= 0 && idx < options.length) {
         respuesta = options[idx];
@@ -92,6 +95,7 @@ export function extractQADoc(markdown: string): QADoc {
     options = [];
     solucionLines = [];
     clave = null;
+    explicitRespuesta = null;
   }
 
   function maybeSetCategoryFromHeading(text: string) {
@@ -148,9 +152,10 @@ export function extractQADoc(markdown: string): QADoc {
     }
     const mRespuestaInline = /^RESPUESTA\s*[:\-]\s*(.+)$/i.exec(line);
     if (mRespuestaInline) {
-      // we capture but will prefer option-derived text if clave exists
-      // add to solution narrative as contextual information
-      solucionLines.push(`Respuesta: ${mRespuestaInline[1].trim()}`);
+      // record explicit respuesta and retain inside solution narrative
+      const respText = mRespuestaInline[1].trim();
+      solucionLines.push(`Respuesta: ${respText}`);
+      explicitRespuesta = respText;
       continue;
     }
 
