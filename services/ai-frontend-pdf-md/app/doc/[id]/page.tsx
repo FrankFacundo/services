@@ -2,6 +2,7 @@ import { getDocWithContent, listDocs } from '@/lib/scan';
 import SplitPane from '@/components/SplitPane';
 import nextDynamic from 'next/dynamic';
 import RightMarkdownPanel from '@/components/RightMarkdownPanel';
+import JsonPanel from '@/components/JsonPanel';
 import StatusPanel from '@/components/StatusPanel';
 import { extractHeadings } from '@/lib/markdown';
 import Link from 'next/link';
@@ -48,7 +49,7 @@ export default async function DocPage({ params }: { params: { id: string } }) {
           <Link className="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800" href="/">Back</Link>
         </div>
       </div>
-      <SplitPane leftTitle="PDF" rightTitle="Markdown">
+      <SplitPane leftTitle="PDF" rightTitle="Markdown · JSON">
         <div className="h-full overflow-auto">
           {pdfRel ? (
             <PdfViewer fileUrl={pdfUrl} />
@@ -56,7 +57,13 @@ export default async function DocPage({ params }: { params: { id: string } }) {
             <div className="p-4 text-sm text-gray-500">PDF missing.</div>
           )}
         </div>
-        <RightMarkdownPanel headings={headings} content={mdContent} mdRelPath={mdRel} />
+        {/* Nest a second split on the right to show Markdown and JSON side-by-side */}
+        <div className="h-full">
+          <SplitPane leftTitle="Markdown" rightTitle="JSON">
+            <RightMarkdownPanel headings={headings} content={mdContent} mdRelPath={mdRel} />
+            <JsonPanel content={mdContent} title={title} />
+          </SplitPane>
+        </div>
       </SplitPane>
     </div>
   );
