@@ -30,6 +30,16 @@ function normalizeKey(s: string): string {
     .trim();
 }
 
+function normalizeForCompare(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/\p{Diacritic}+/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s"'“”‘’\(\[]+|[\s\.\,;:!\?"'“”‘’\)\]]+$/g, '')
+    .trim();
+}
+
 const CategoryMap: Map<string, string> = new Map(
   AllowedCategories.map((c) => [normalizeKey(c), c])
 );
@@ -75,19 +85,33 @@ export function extractQADoc(markdown: string): QADoc {
         respuesta = options[idx];
       }
     }
+    // Derive Clave from Respuesta text by matching against options
+    let claveFromRespuesta: string | null = null;
+    if (respuesta) {
+      const normResp = normalizeForCompare(respuesta);
+      for (let oi = 0; oi < options.length; oi++) {
+        const opt = options[oi] ?? '';
+        if (normalizeForCompare(opt) === normResp) {
+          claveFromRespuesta = String.fromCharCode('A'.charCodeAt(0) + oi);
+          break;
+        }
+      }
+    }
     const entry: QAEntry = {
       Categoria: currentCategory,
       Problema: problemLines.join("\n"),
       Opciones: options.slice(),
       Respuesta: respuesta,
-      Clave: (clave || "").toUpperCase(),
+      Clave: (claveFromRespuesta || clave || "").toUpperCase(),
       Solucion: solucionLines.length ? solucionLines.join("\n") : undefined,
     };
 
     const cat = currentCategory;
     if (!categories[cat]) categories[cat] = {};
     // Prefer the explicit question number extracted from the heading; fallback to sequence
-    const key = (qNumber && qNumber.trim()) || String((counters[cat] = (counters[cat] || 0) + 1));
+    const key =
+      (qNumber && qNumber.trim()) ||
+      String((counters[cat] = (counters[cat] || 0) + 1));
     categories[cat][key] = entry;
 
     // reset
@@ -140,6 +164,13 @@ export function extractQADoc(markdown: string): QADoc {
       const mClaveH = /^CLAVE\s*:\s*([A-E])/i.exec(text);
       if (mClaveH) {
         clave = mClaveH[1].toUpperCase();
+        continue;
+      }
+
+      const mRespH = /^RESPUESTA\s*:\s*(.+)$/i.exec(text);
+      if (mRespH) {
+        explicitRespuesta = mRespH[1].trim();
+        solucionLines.push(`Respuesta: ${explicitRespuesta}`);
         continue;
       }
       // For any other heading, treat as a boundary in general

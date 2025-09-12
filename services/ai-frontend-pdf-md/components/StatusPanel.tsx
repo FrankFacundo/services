@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { buildQADocumentJson } from '@/lib/qa';
 
 type ReviewState = 'not_started' | 'in_progress' | 'done';
 type DocStatus = {
@@ -8,7 +9,7 @@ type DocStatus = {
   reviewImages: ReviewState;
 };
 
-export default function StatusPanel({ id }: { id: string }) {
+export default function StatusPanel({ id, content, title }: { id: string; content: string; title: string }) {
   const [status, setStatus] = useState<DocStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +54,61 @@ export default function StatusPanel({ id }: { id: string }) {
     s === 'in_progress' ? 'bg-yellow-200 text-yellow-900 dark:bg-yellow-800/50 dark:text-yellow-100' :
     'bg-red-200 text-red-900 dark:bg-red-800/50 dark:text-red-100';
 
+  // Extracted JSON and diagnostics (same data source as JsonPanel)
+  const data = useMemo(() => buildQADocumentJson(content, title), [content, title]);
+  const counts = useMemo(() => {
+    const root = (data as any)[title] || {};
+    let total = 0;
+    const byCat: { cat: string; count: number }[] = [];
+    for (const cat of Object.keys(root)) {
+      const c = Object.keys(root[cat] || {}).length;
+      if (c > 0) byCat.push({ cat, count: c });
+      total += c;
+    }
+    return { total, byCat };
+  }, [data, title]);
+
+  type ItemRef = { cat: string; key: string; problema?: string };
+  const diagnostics = useMemo(() => {
+    const root = (data as any)[title] || {} as Record<string, Record<string, any>>;
+    const emptyCategoria: ItemRef[] = [];
+    const emptyProblema: ItemRef[] = [];
+    const wrongOpciones: ItemRef[] = [];
+    const emptyRespuesta: ItemRef[] = [];
+    const emptyClave: ItemRef[] = [];
+
+    for (const cat of Object.keys(root)) {
+      const entries = root[cat] || {};
+      for (const key of Object.keys(entries)) {
+        const q = entries[key] || {};
+        const ref = { cat, key, problema: (q.Problema || '').slice(0, 80) } as ItemRef;
+        if (!q.Categoria || String(q.Categoria).trim() === '') emptyCategoria.push(ref);
+        if (!q.Problema || String(q.Problema).trim() === '') emptyProblema.push(ref);
+        const opts = Array.isArray(q.Opciones) ? q.Opciones : [];
+        if (opts.length !== 5) wrongOpciones.push(ref);
+        if (!q.Respuesta || String(q.Respuesta).trim() === '') emptyRespuesta.push(ref);
+        if (!q.Clave || String(q.Clave).trim() === '') emptyClave.push(ref);
+      }
+    }
+    return { emptyCategoria, emptyProblema, wrongOpciones, emptyRespuesta, emptyClave };
+  }, [data, title]);
+
   if (!status) {
     return <div className="text-xs text-gray-500">Loading status...</div>;
   }
+
+  // Helpers to display only question numbers per requirement
+  const formatKeys = (items: ItemRef[]) => {
+    const nums = items
+      .map((r) => r.key)
+      .filter((k) => k != null)
+      .map((k) => (String(k).match(/^\d+$/) ? Number(k) : k));
+    const numeric = nums.filter((v) => typeof v === 'number') as number[];
+    const nonNumeric = nums.filter((v) => typeof v !== 'number') as (string | number)[];
+    numeric.sort((a, b) => a - b);
+    const ordered = [...numeric, ...nonNumeric];
+    return ordered.join(', ');
+  };
 
   return (
     <div className="flex flex-wrap gap-2 items-center text-xs">
@@ -93,7 +146,44 @@ export default function StatusPanel({ id }: { id: string }) {
           >{s.replace('_',' ')}</button>
         ))}
       </div>
+
+      {/* Extracted JSON quick info and diagnostics */}
+      <div className="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-1" aria-hidden />
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-gray-600 dark:text-gray-300">QA:</span>
+        <span className="text-gray-600 dark:text-gray-300">
+          {counts.total} questions{counts.byCat.length > 0 && ' · '}
+          {counts.byCat.map((x) => `${x.cat}: ${x.count}`).join(' · ')}
+        </span>
+      </div>
+      {/* One-per-line checks under the bar, truncated to avoid overflow */}
+      <div className="w-full flex flex-col gap-0.5 mt-1 min-w-0">
+        {diagnostics.emptyCategoria.length > 0 && (
+          <div className="truncate text-red-700 dark:text-red-300" title={`Empty categoria: ${formatKeys(diagnostics.emptyCategoria)}`}>
+            Empty categoria: {formatKeys(diagnostics.emptyCategoria)}
+          </div>
+        )}
+        {diagnostics.emptyProblema.length > 0 && (
+          <div className="truncate text-red-700 dark:text-red-300" title={`Empty problema: ${formatKeys(diagnostics.emptyProblema)}`}>
+            Empty problema: {formatKeys(diagnostics.emptyProblema)}
+          </div>
+        )}
+        {diagnostics.wrongOpciones.length > 0 && (
+          <div className="truncate text-yellow-700 dark:text-yellow-300" title={`Opciones ≠ 5: ${formatKeys(diagnostics.wrongOpciones)}`}>
+            Opciones ≠ 5: {formatKeys(diagnostics.wrongOpciones)}
+          </div>
+        )}
+        {diagnostics.emptyRespuesta.length > 0 && (
+          <div className="truncate text-red-700 dark:text-red-300" title={`Empty respuesta: ${formatKeys(diagnostics.emptyRespuesta)}`}>
+            Empty respuesta: {formatKeys(diagnostics.emptyRespuesta)}
+          </div>
+        )}
+        {diagnostics.emptyClave.length > 0 && (
+          <div className="truncate text-red-700 dark:text-red-300" title={`Empty clave: ${formatKeys(diagnostics.emptyClave)}`}>
+            Empty clave: {formatKeys(diagnostics.emptyClave)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
