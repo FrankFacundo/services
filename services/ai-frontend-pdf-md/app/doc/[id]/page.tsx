@@ -22,7 +22,7 @@ export default async function DocPage({ params }: { params: { id: string } }) {
   const doc = await getDocWithContent(id);
   if (!doc) {
     return (
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full">
         <div className="p-6 border rounded-md border-red-300 text-red-700 bg-red-50 dark:bg-red-950/30 dark:border-red-800">
           Document not found.
         </div>
@@ -35,7 +35,7 @@ export default async function DocPage({ params }: { params: { id: string } }) {
   const headings = extractHeadings(mdContent);
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-3">
+    <div className="w-full space-y-3">
       <div className="flex flex-wrap gap-2 items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">{title}</h1>
