@@ -49,22 +49,24 @@ export default async function DocPage({ params }: { params: { id: string } }) {
           <Link className="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800" href="/">Back</Link>
         </div>
       </div>
-      <SplitPane leftTitle="PDF" rightTitle="Markdown · JSON · Images">
-        <div className="h-full overflow-auto">
-          {pdfRel ? (
-            <PdfViewer fileUrl={pdfUrl} />
-          ) : (
-            <div className="p-4 text-sm text-gray-500">PDF missing.</div>
-          )}
-        </div>
-        {/* Nest a second split on the right to show Markdown and JSON side-by-side */}
-        <div className="h-full">
-          <SplitPane leftTitle="Markdown" rightTitle="JSON · Images">
-            <RightMarkdownPanel headings={headings} content={mdContent} mdRelPath={mdRel} />
-            <RightSideTabs content={mdContent} title={title} mdRelPath={mdRel} />
-          </SplitPane>
-        </div>
-      </SplitPane>
+      <div className="h-[calc(100vh-160px)]">
+        <SplitPane leftTitle="PDF" rightTitle="Markdown · JSON · Images">
+          <div className="h-full overflow-auto">
+            {pdfRel ? (
+              <PdfViewer fileUrl={pdfUrl} />
+            ) : (
+              <div className="p-4 text-sm text-gray-500">PDF missing.</div>
+            )}
+          </div>
+          {/* Nest a second split on the right to show Markdown and JSON side-by-side */}
+          <div className="h-full">
+            <SplitPane leftTitle="Markdown" rightTitle="JSON · Images">
+              <RightMarkdownPanel headings={headings} content={mdContent} mdRelPath={mdRel} />
+              <RightSideTabs content={mdContent} title={title} mdRelPath={mdRel} />
+            </SplitPane>
+          </div>
+        </SplitPane>
+      </div>
     </div>
   );
 }

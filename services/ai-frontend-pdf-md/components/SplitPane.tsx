@@ -39,7 +39,7 @@ export default function SplitPane({ children, leftTitle, rightTitle }: PropsWith
   const [left, right] = Array.isArray(children) ? children : [children, null];
 
   return (
-    <div className="w-full h-[calc(100vh-160px)] border border-gray-200 dark:border-gray-800 rounded-md overflow-hidden">
+    <div className="w-full h-full min-h-0 border border-gray-200 dark:border-gray-800 rounded-md overflow-hidden">
       <div className="flex items-center justify-between px-2 py-1.5 text-xs border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
         <div className="text-gray-600 dark:text-gray-300">Layout: {vertical ? 'Side-by-side' : 'Stacked'}</div>
         <button
@@ -50,9 +50,15 @@ export default function SplitPane({ children, leftTitle, rightTitle }: PropsWith
       <div ref={containerRef} className={clsx('relative w-full h-[calc(100%-32px)]', vertical ? 'flex' : 'block')}
         onMouseLeave={onMouseUp}
       >
-        <section className={clsx('overflow-hidden', vertical ? 'h-full' : '')} style={vertical ? { width: `${ratio * 100}%` } : { height: `${ratio * 100}%` }}>
+        <section
+          className={clsx(
+            'overflow-hidden flex flex-col min-h-0',
+            vertical ? 'h-full min-w-0' : ''
+          )}
+          style={vertical ? { width: `${ratio * 100}%` } : { height: `${ratio * 100}%` }}
+        >
           <div className="px-2 py-1 text-xs border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">{leftTitle}</div>
-          {left}
+          <div className="flex-1 min-h-0 overflow-hidden">{left}</div>
         </section>
         <div
           role="separator"
@@ -63,12 +69,17 @@ export default function SplitPane({ children, leftTitle, rightTitle }: PropsWith
           className={clsx('absolute z-20', vertical ? 'top-0 bottom-0 w-1 cursor-col-resize' : 'left-0 right-0 h-1 cursor-row-resize', 'bg-gray-200/60 dark:bg-gray-700/60 hover:bg-blue-400/60')}
           style={vertical ? { left: `${ratio * 100}%`, transform: 'translateX(-50%)' } : { top: `${ratio * 100}%`, transform: 'translateY(-50%)' }}
         />
-        <section className={clsx('absolute right-0 bottom-0 overflow-hidden', vertical ? 'top-0' : 'left-0')} style={vertical ? { left: `${ratio * 100}%` } : { top: `${ratio * 100}%` }}>
+        <section
+          className={clsx(
+            'absolute right-0 bottom-0 overflow-hidden flex flex-col min-h-0',
+            vertical ? 'top-0 min-w-0' : 'left-0'
+          )}
+          style={vertical ? { left: `${ratio * 100}%` } : { top: `${ratio * 100}%` }}
+        >
           <div className="px-2 py-1 text-xs border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">{rightTitle}</div>
-          {right}
+          <div className="flex-1 min-h-0 overflow-hidden">{right}</div>
         </section>
       </div>
     </div>
   );
 }
-
