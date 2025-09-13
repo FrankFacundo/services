@@ -87,7 +87,12 @@ export default function PdfViewer({ fileUrl }: { fileUrl: string }) {
           <div className="flex flex-col items-center gap-6">
             {pagesArray.map((p, i) => (
               <div key={p} ref={(el) => (pageRefs.current[i] = el)}>
-                <Page pageNumber={p} scale={scale} renderTextLayer={false} renderAnnotationLayer={false} />
+                <Page
+                  pageNumber={p}
+                  scale={scale}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                />
               </div>
             ))}
           </div>

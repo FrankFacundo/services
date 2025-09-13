@@ -1,5 +1,8 @@
 import './globals.css';
 import 'katex/dist/katex.min.css';
+// Enable text selection and annotations in react-pdf
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
 import { ReactNode } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 
