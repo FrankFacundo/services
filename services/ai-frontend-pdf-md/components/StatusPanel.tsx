@@ -95,6 +95,7 @@ export default function StatusPanel({ id, content, title, mdRelPath }: { id: str
     const wrongOpciones: ItemRef[] = [];
     const emptyRespuesta: ItemRef[] = [];
     const emptyClave: ItemRef[] = [];
+    const allNumericKeys: number[] = [];
 
     for (const cat of Object.keys(root)) {
       const entries = root[cat] || {};
@@ -107,9 +108,27 @@ export default function StatusPanel({ id, content, title, mdRelPath }: { id: str
         if (opts.length !== 5) wrongOpciones.push(ref);
         if (!q.Respuesta || String(q.Respuesta).trim() === '') emptyRespuesta.push(ref);
         if (!q.Clave || String(q.Clave).trim() === '') emptyClave.push(ref);
+
+        // collect numeric question numbers across all categories
+        if (/^\d+$/.test(String(key))) {
+          allNumericKeys.push(Number(key));
+        }
       }
     }
-    return { emptyCategoria, emptyProblema, wrongOpciones, emptyRespuesta, emptyClave };
+    // Compute missing numbers between smallest and largest numeric keys
+    let missingNumbers: number[] = [];
+    let rangeMin: number | null = null;
+    let rangeMax: number | null = null;
+    if (allNumericKeys.length >= 2) {
+      allNumericKeys.sort((a, b) => a - b);
+      rangeMin = allNumericKeys[0];
+      rangeMax = allNumericKeys[allNumericKeys.length - 1];
+      const existing = new Set(allNumericKeys);
+      for (let n = rangeMin; n <= rangeMax; n++) {
+        if (!existing.has(n)) missingNumbers.push(n);
+      }
+    }
+    return { emptyCategoria, emptyProblema, wrongOpciones, emptyRespuesta, emptyClave, missingNumbers, rangeMin, rangeMax };
   }, [data, title]);
 
   if (!status) {
@@ -211,6 +230,14 @@ export default function StatusPanel({ id, content, title, mdRelPath }: { id: str
       </div>
       {/* One-per-line checks under the bar, truncated to avoid overflow */}
       <div className="w-full flex flex-col gap-0.5 mt-1 min-w-0">
+        {diagnostics.missingNumbers && diagnostics.missingNumbers.length > 0 && (
+          <div
+            className="truncate text-yellow-700 dark:text-yellow-300"
+            title={`Missing numbers${typeof diagnostics.rangeMin === 'number' && typeof diagnostics.rangeMax === 'number' ? ` between ${diagnostics.rangeMin} and ${diagnostics.rangeMax}` : ''}: ${diagnostics.missingNumbers.join(', ')}`}
+          >
+            Missing numbers{typeof diagnostics.rangeMin === 'number' && typeof diagnostics.rangeMax === 'number' ? ` (${diagnostics.rangeMin}–${diagnostics.rangeMax})` : ''}: {diagnostics.missingNumbers.join(', ')}
+          </div>
+        )}
         {diagnostics.emptyCategoria.length > 0 && (
           <div className="truncate text-red-700 dark:text-red-300" title={`Empty categoria: ${formatKeys(diagnostics.emptyCategoria)}`}>
             Empty categoria: {formatKeys(diagnostics.emptyCategoria)}
