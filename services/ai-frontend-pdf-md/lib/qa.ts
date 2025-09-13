@@ -92,58 +92,61 @@ export function extractQADoc(markdown: string): QADoc {
   }
 
   function flushQuestion() {
-    if (!currentCategory) return;
-    if (problemLines.length === 0) return;
-    // Build Respuesta from explicit line, then fall back to clave option
-    let respuesta = "";
-    if (explicitRespuesta && explicitRespuesta.trim()) {
-      respuesta = explicitRespuesta.trim();
-    } else if (clave) {
-      const idx = clave.toUpperCase().charCodeAt(0) - "A".charCodeAt(0);
-      if (idx >= 0 && idx < options.length) {
-        respuesta = options[idx];
-      }
-    }
-    // Derive Clave from Respuesta text by matching against options
-    let claveFromRespuesta: string | null = null;
-    if (respuesta) {
-      const normResp = normalizeForCompare(respuesta);
-      for (let oi = 0; oi < options.length; oi++) {
-        const opt = options[oi] ?? '';
-        if (normalizeForCompare(opt) === normResp) {
-          claveFromRespuesta = String.fromCharCode('A'.charCodeAt(0) + oi);
-          break;
+    // Build and store only if there is content and a current category
+    if (currentCategory && problemLines.length > 0) {
+      // Build Respuesta from explicit line, then fall back to clave option
+      let respuesta = "";
+      if (explicitRespuesta && explicitRespuesta.trim()) {
+        respuesta = explicitRespuesta.trim();
+      } else if (clave) {
+        const idx = clave.toUpperCase().charCodeAt(0) - "A".charCodeAt(0);
+        if (idx >= 0 && idx < options.length) {
+          respuesta = options[idx];
         }
       }
+      // Derive Clave from Respuesta text by matching against options
+      let claveFromRespuesta: string | null = null;
+      if (respuesta) {
+        const normResp = normalizeForCompare(respuesta);
+        for (let oi = 0; oi < options.length; oi++) {
+          const opt = options[oi] ?? '';
+          if (normalizeForCompare(opt) === normResp) {
+            claveFromRespuesta = String.fromCharCode('A'.charCodeAt(0) + oi);
+            break;
+          }
+        }
+      }
+      const entry: QAEntry = {
+        Categoria: currentCategory,
+        Problema: problemLines.join("\n"),
+        Opciones: options.slice(),
+        Respuesta: respuesta,
+        Clave: (claveFromRespuesta || clave || "").toUpperCase(),
+        Solucion: solucionLines.length ? solucionLines.join("\n") : undefined,
+        Imagenes: Array.from(new Set([
+          ...extractImages(problemLines.join("\n")),
+          ...options.flatMap((o) => extractImages(o || "")),
+        ])),
+      };
+
+      const cat = currentCategory;
+      if (!categories[cat]) categories[cat] = {};
+      // Prefer the explicit question number extracted from the heading; fallback to sequence
+      const key =
+        (qNumber && qNumber.trim()) ||
+        String((counters[cat] = (counters[cat] || 0) + 1));
+      categories[cat][key] = entry;
     }
-    const entry: QAEntry = {
-      Categoria: currentCategory,
-      Problema: problemLines.join("\n"),
-      Opciones: options.slice(),
-      Respuesta: respuesta,
-      Clave: (claveFromRespuesta || clave || "").toUpperCase(),
-      Solucion: solucionLines.length ? solucionLines.join("\n") : undefined,
-      Imagenes: Array.from(new Set([
-        ...extractImages(problemLines.join("\n")),
-        ...options.flatMap((o) => extractImages(o || "")),
-      ])),
-    };
 
-    const cat = currentCategory;
-    if (!categories[cat]) categories[cat] = {};
-    // Prefer the explicit question number extracted from the heading; fallback to sequence
-    const key =
-      (qNumber && qNumber.trim()) ||
-      String((counters[cat] = (counters[cat] || 0) + 1));
-    categories[cat][key] = entry;
-
-    // reset
+    // Always reset transient state, even if nothing was flushed
     qNumber = null;
     problemLines = [];
     options = [];
     solucionLines = [];
     clave = null;
     explicitRespuesta = null;
+    collecting = false;
+    inResolucion = false;
   }
 
   function maybeSetCategoryFromHeading(text: string) {
@@ -196,7 +199,9 @@ export function extractQADoc(markdown: string): QADoc {
         solucionLines.push(`Respuesta: ${explicitRespuesta}`);
         continue;
       }
-      // For any other heading, treat as a boundary in general
+      // For any other heading: do not treat as a boundary.
+      // We intentionally allow it to fall through so the heading line
+      // can be captured as part of the problem text if collecting.
     }
 
     // Also support inline keyword lines
