@@ -1,5 +1,5 @@
 import { getDocWithContent, listDocs } from '@/lib/scan';
-import SplitPane from '@/components/SplitPane';
+import TripleSplitPane from '@/components/TripleSplitPane';
 import nextDynamic from 'next/dynamic';
 import RightMarkdownPanel from '@/components/RightMarkdownPanel';
 import RightSideTabs from '@/components/RightSideTabs';
@@ -52,7 +52,7 @@ export default async function DocPage({ params }: { params: { id: string } }) {
         </div>
       </div>
       <div className="h-[calc(100vh-160px)]">
-        <SplitPane leftTitle="PDF" rightTitle="Markdown · JSON · Images">
+        <TripleSplitPane leftTitle="PDF" middleTitle="Markdown" rightTitle="JSON · Images">
           <div className="h-full overflow-auto">
             {pdfRel ? (
               <PdfViewer fileUrl={pdfUrl} />
@@ -60,14 +60,9 @@ export default async function DocPage({ params }: { params: { id: string } }) {
               <div className="p-4 text-sm text-gray-500">PDF missing.</div>
             )}
           </div>
-          {/* Nest a second split on the right to show Markdown and JSON side-by-side */}
-          <div className="h-full">
-            <SplitPane leftTitle="Markdown" rightTitle="JSON · Images">
-              <RightMarkdownPanel headings={headings} content={mdContent} mdRelPath={mdRel} />
-              <RightSideTabs content={mdContent} title={title} mdRelPath={mdRel} />
-            </SplitPane>
-          </div>
-        </SplitPane>
+          <RightMarkdownPanel headings={headings} content={mdContent} mdRelPath={mdRel} />
+          <RightSideTabs content={mdContent} title={title} mdRelPath={mdRel} />
+        </TripleSplitPane>
       </div>
     </div>
   );
