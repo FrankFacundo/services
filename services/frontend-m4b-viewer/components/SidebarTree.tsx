@@ -39,7 +39,7 @@ function TreeNode({ path, entries, level }: { path: string; entries: Entry[]; le
   return (
     <div>
       {path !== "" && (
-        <div className="flex items-center justify-between pr-2 pl-2 py-1 cursor-pointer hover:bg-gray-50" onClick={() => setOpen(!open)}>
+        <div className="flex items-center justify-between pr-2 pl-2 py-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" onClick={() => setOpen(!open)}>
           <div className="flex items-center gap-2">
             <span>{open ? "📂" : "📁"}</span>
             <span className="truncate">{path.split("/").pop()}</span>
@@ -54,7 +54,7 @@ function TreeNode({ path, entries, level }: { path: string; entries: Entry[]; le
           </div>
         ))}
         {files.map((f) => (
-          <Link key={f.relPath} href={`/file/${f.relPath.split("/").map(encodeURIComponent).join("/")}`} className="flex items-center gap-2 pl-8 pr-2 py-1 hover:bg-gray-50">
+          <Link key={f.relPath} href={`/file/${f.relPath.split("/").map(encodeURIComponent).join("/")}`} className="flex items-center gap-2 pl-8 pr-2 py-1 hover:bg-gray-50 dark:hover:bg-gray-700">
             <span>🎧</span>
             <span className="truncate">{f.name}</span>
           </Link>
@@ -63,4 +63,3 @@ function TreeNode({ path, entries, level }: { path: string; entries: Entry[]; le
     </div>
   );
 }
-

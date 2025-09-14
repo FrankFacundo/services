@@ -41,7 +41,7 @@ function smallPreview(v: any): string {
 }
 
 function Line({ children }: { children: React.ReactNode }) {
-  return <div className="whitespace-pre font-mono text-xs leading-5 text-gray-800">{children}</div>;
+  return <div className="whitespace-pre font-mono text-xs leading-5 text-gray-800 dark:text-gray-100">{children}</div>;
 }
 
 function Caret({ open }: { open: boolean }) {
@@ -64,12 +64,12 @@ function JsonNode({ name, value, depth }: NodeProps) {
       <div>
         <Line>
           <span style={padding}>
-            <button className="text-left hover:text-blue-700" onClick={() => setOpen(!open)} aria-label="Toggle array">
+            <button className="text-left hover:text-blue-700 dark:hover:text-blue-400" onClick={() => setOpen(!open)} aria-label="Toggle array">
               <Caret open={open} />
-              {name ? <span className="text-gray-600">{name}: </span> : null}
-              <span className="text-purple-700">Array</span>
-              <span className="text-gray-500">({count})</span>
-              {!open && <span className="text-gray-500"> {preview(value)}</span>}
+              {name ? <span className="text-gray-600 dark:text-gray-300">{name}: </span> : null}
+              <span className="text-purple-700 dark:text-purple-300">Array</span>
+              <span className="text-gray-500 dark:text-gray-400">({count})</span>
+              {!open && <span className="text-gray-500 dark:text-gray-400"> {preview(value)}</span>}
             </button>
           </span>
         </Line>
@@ -107,12 +107,12 @@ function JsonNode({ name, value, depth }: NodeProps) {
       <div>
         <Line>
           <span style={padding}>
-            <button className="text-left hover:text-blue-700" onClick={() => setOpen(!open)} aria-label="Toggle object">
+            <button className="text-left hover:text-blue-700 dark:hover:text-blue-400" onClick={() => setOpen(!open)} aria-label="Toggle object">
               <Caret open={open} />
-              {name ? <span className="text-gray-600">{name}: </span> : null}
-              <span className="text-purple-700">Object</span>
-              <span className="text-gray-500">({keys.length})</span>
-              {!open && <span className="text-gray-500"> {preview(value)}</span>}
+              {name ? <span className="text-gray-600 dark:text-gray-300">{name}: </span> : null}
+              <span className="text-purple-700 dark:text-purple-300">Object</span>
+              <span className="text-gray-500 dark:text-gray-400">({keys.length})</span>
+              {!open && <span className="text-gray-500 dark:text-gray-400"> {preview(value)}</span>}
             </button>
           </span>
         </Line>
@@ -150,8 +150,8 @@ function JsonNode({ name, value, depth }: NodeProps) {
   return (
     <Line>
       <span style={padding}>
-        {name ? <span className="text-gray-600">{name}: </span> : null}
-        <span className="text-teal-700">{valStr}</span>
+        {name ? <span className="text-gray-600 dark:text-gray-300">{name}: </span> : null}
+        <span className="text-teal-700 dark:text-teal-300">{valStr}</span>
       </span>
     </Line>
   );
@@ -159,8 +159,8 @@ function JsonNode({ name, value, depth }: NodeProps) {
 
 export default function JsonTree({ data }: { data: any }) {
   return (
-    <div className="rounded border bg-white">
-      <div className="p-2 flex items-center justify-between border-b bg-gray-50">
+    <div className="rounded border bg-white dark:bg-gray-800 dark:border-gray-700">
+      <div className="p-2 flex items-center justify-between border-b bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
         <div className="font-medium">JSON</div>
       </div>
       <div className="p-2 overflow-auto">

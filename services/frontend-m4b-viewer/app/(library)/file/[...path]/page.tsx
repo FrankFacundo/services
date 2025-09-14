@@ -7,6 +7,8 @@ import ChapterList from "@/components/ChapterList";
 import MetaTable from "@/components/MetaTable";
 import Tabs from "@/components/Tabs";
 import JsonTree from "@/components/JsonTree";
+import TranscribeTab from "@/components/TranscribeTab";
+import CurrentTranscript from "@/components/CurrentTranscript";
 
 export default async function FilePage({ params }: { params: { path: string[] } }) {
   const relPath = decodeURIComponent(params.path.join("/"));
@@ -26,15 +28,18 @@ export default async function FilePage({ params }: { params: { path: string[] } 
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={cover} alt="Cover" className="w-28 h-28 rounded shadow object-cover bg-gray-100" />
+        <img src={cover} alt="Cover" className="w-28 h-28 rounded shadow object-cover bg-gray-100 dark:bg-gray-700" />
         <div>
           <h1 className="text-2xl font-semibold">{meta.common.title ?? meta.fileName}</h1>
-          <p className="text-gray-600">{meta.common.artist ?? meta.common.album ?? "Unknown"}</p>
-          <p className="text-gray-500 text-sm">{meta.format.codec ?? "MP4/M4B"} • {meta.prettyDuration}</p>
+          <p className="text-gray-600 dark:text-gray-300">{meta.common.artist ?? meta.common.album ?? "Unknown"}</p>
+          <p className="text-gray-500 text-sm dark:text-gray-400">{meta.format.codec ?? "MP4/M4B"} • {meta.prettyDuration}</p>
         </div>
       </div>
 
       <AudioPlayer src={src} relPath={relPath} chapters={meta.chapters} />
+
+      {/* Always-visible transcript synced to current chapter */}
+      <CurrentTranscript relPath={relPath} chapters={meta.chapters} />
 
       <Tabs
         tabs={[
@@ -50,6 +55,11 @@ export default async function FilePage({ params }: { params: { path: string[] } 
                 </div>
               </div>
             ),
+          },
+          {
+            id: "stt",
+            title: "Transcribe",
+            content: <TranscribeTab relPath={relPath} chapters={meta.chapters} />,
           },
           {
             id: "chapters",

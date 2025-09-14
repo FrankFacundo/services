@@ -17,12 +17,12 @@ export default function MetaTable({ metadata }: { metadata: ParsedMetadata }) {
     { key: "File Size", val: metadata.format.size ? `${(metadata.format.size / (1024 * 1024)).toFixed(1)} MB` : undefined },
   ];
   return (
-    <div className="rounded border bg-white overflow-hidden">
+    <div className="rounded border bg-white overflow-hidden dark:bg-gray-800 dark:border-gray-700">
       <table className="min-w-full">
         <tbody>
           {rows.filter(r => r.val != null && r.val !== "").map((r) => (
-            <tr key={r.key} className="border-b">
-              <td className="p-2 w-40 font-medium bg-gray-50">{r.key}</td>
+            <tr key={r.key} className="border-b dark:border-gray-700">
+              <td className="p-2 w-40 font-medium bg-gray-50 dark:bg-gray-800">{r.key}</td>
               <td className="p-2">{r.val as any}</td>
             </tr>
           ))}
@@ -31,4 +31,3 @@ export default function MetaTable({ metadata }: { metadata: ParsedMetadata }) {
     </div>
   );
 }
-

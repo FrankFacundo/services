@@ -10,7 +10,7 @@ export default async function BrowsePage({ searchParams }: { searchParams: { pat
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-xl font-semibold">Browse</h1>
-      <nav className="text-sm text-gray-600">
+      <nav className="text-sm text-gray-600 dark:text-gray-300">
         {crumb.map((c, i) => (
           <span key={i}>
             {i > 0 && " / "}
@@ -18,25 +18,24 @@ export default async function BrowsePage({ searchParams }: { searchParams: { pat
           </span>
         ))}
       </nav>
-      <div className="rounded border divide-y bg-white">
+      <div className="rounded border divide-y bg-white dark:bg-gray-800 dark:border-gray-700 dark:divide-gray-700">
         {entries.map((e) => (
-          <div key={e.name} className="flex items-center justify-between p-3 hover:bg-gray-50">
+          <div key={e.name} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800">
             <div className="flex items-center gap-2">
-              <span className="inline-block w-5 text-gray-500">{e.type === "dir" ? "📁" : "🎧"}</span>
+              <span className="inline-block w-5 text-gray-500 dark:text-gray-400">{e.type === "dir" ? "📁" : "🎧"}</span>
               <span className="font-medium">{e.name}</span>
             </div>
             <div>
               {e.type === "dir" ? (
-                <Link className="text-blue-600" href={`/browse?path=${encodeURIComponent(e.relPath)}`}>Open</Link>
+                <Link className="text-blue-600 dark:text-blue-400" href={`/browse?path=${encodeURIComponent(e.relPath)}`}>Open</Link>
               ) : (
-                <Link className="text-blue-600" href={`/file/${e.relPath.split("/").map(encodeURIComponent).join("/")}`}>View</Link>
+                <Link className="text-blue-600 dark:text-blue-400" href={`/file/${e.relPath.split("/").map(encodeURIComponent).join("/")}`}>View</Link>
               )}
             </div>
           </div>
         ))}
-        {entries.length === 0 && <div className="p-6 text-gray-500">Empty folder</div>}
+        {entries.length === 0 && <div className="p-6 text-gray-500 dark:text-gray-400">Empty folder</div>}
       </div>
     </div>
   );
 }
-
