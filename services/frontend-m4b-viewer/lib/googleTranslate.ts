@@ -85,7 +85,11 @@ export async function translateBatch(
 ): Promise<{ items: BatchResultItem[]; detectedSourceLanguage?: string | null }> {
   const results: BatchResultItem[] = [];
   let detected: string | null | undefined;
+  const total = items.length;
+  const updateProgress = createProgressRenderer(total);
+  updateProgress(0);
   for (const item of items) {
+    updateProgress(results.length + 1);
     const trimmed = item.text.trim();
     if (!trimmed) {
       results.push({ id: item.id, text: item.text, translation: "", detectedSourceLanguage: null });
@@ -102,5 +106,29 @@ export async function translateBatch(
       detectedSourceLanguage: res.detectedSourceLanguage,
     });
   }
+  updateProgress(total, true);
   return { items: results, detectedSourceLanguage: detected };
+}
+
+function createProgressRenderer(total: number) {
+  const hasTty = typeof process !== "undefined" && !!process.stderr && !!process.stderr.isTTY;
+  if (!hasTty || total <= 0) {
+    return (_current: number) => void 0;
+  }
+  const width = Math.max(10, Math.min(40, total));
+  const start = Date.now();
+  return (current: number, end = false) => {
+    const ratio = Math.max(0, Math.min(1, total === 0 ? 1 : current / total));
+    const filled = Math.round(ratio * width);
+    const bar = `${"█".repeat(filled)}${"░".repeat(width - filled)}`;
+    const pct = Math.round(ratio * 100)
+      .toString()
+      .padStart(3, " ");
+    const elapsedSeconds = ((Date.now() - start) / 1000).toFixed(1);
+    const line = `translate [${bar}] ${pct}% (${current}/${total}) ${elapsedSeconds}s`;
+    process.stderr.write(`\r${line}`);
+    if (end || current >= total) {
+      process.stderr.write("\n");
+    }
+  };
 }
