@@ -11,7 +11,12 @@ import { promisify } from "util";
 const execFileAsync = promisify(execFile);
 
 type WhisperVerboseWord = { word: string; start: number; end: number };
-type WhisperVerboseSegment = { id: number; start: number; end: number; text: string };
+type WhisperVerboseSegment = {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
+};
 type WhisperVerbose = {
   text: string;
   words?: WhisperVerboseWord[];
@@ -24,7 +29,12 @@ function ensureEnv() {
   return apiKey;
 }
 
-async function ffmpegSliceToMp3(srcPath: string, startSec: number, durationSec: number, outPath: string) {
+async function ffmpegSliceToMp3(
+  srcPath: string,
+  startSec: number,
+  durationSec: number,
+  outPath: string
+) {
   // -accurate_seek with -ss before -i is fast; for precision for small windows, we can do -ss after -i
   const args = [
     "-hide_banner",
@@ -48,14 +58,18 @@ async function ffmpegSliceToMp3(srcPath: string, startSec: number, durationSec: 
   await execFileAsync("ffmpeg", args);
 }
 
-async function callWhisperVerbose(buffer: Buffer, filename: string, apiKey: string): Promise<WhisperVerbose> {
+async function callWhisperVerbose(
+  buffer: Buffer,
+  filename: string,
+  apiKey: string
+): Promise<WhisperVerbose> {
   const form = new FormData();
   const blob = new Blob([buffer], { type: "audio/mpeg" });
   form.append("file", blob, filename);
   form.append("model", "whisper-1");
   form.append("response_format", "verbose_json");
   // Array fields in multipart: use bracket syntax accepted by OpenAI REST
-  form.append("timestamp_granularities[]", "word");
+  form.append("timestamp_granularities[]", "segment");
 
   const resp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
@@ -72,9 +86,25 @@ async function callWhisperVerbose(buffer: Buffer, filename: string, apiKey: stri
   return json;
 }
 
-function mergeWithOffset(acc: { text: string; words: WhisperVerboseWord[]; segments: WhisperVerboseSegment[] }, part: WhisperVerbose, offset: number) {
-  const words = (part.words || []).map((w, i) => ({ ...w, start: (w.start ?? 0) + offset, end: (w.end ?? 0) + offset }));
-  const segs = (part.segments || []).map((s) => ({ ...s, start: (s.start ?? 0) + offset, end: (s.end ?? 0) + offset }));
+function mergeWithOffset(
+  acc: {
+    text: string;
+    words: WhisperVerboseWord[];
+    segments: WhisperVerboseSegment[];
+  },
+  part: WhisperVerbose,
+  offset: number
+) {
+  const words = (part.words || []).map((w, i) => ({
+    ...w,
+    start: (w.start ?? 0) + offset,
+    end: (w.end ?? 0) + offset,
+  }));
+  const segs = (part.segments || []).map((s) => ({
+    ...s,
+    start: (s.start ?? 0) + offset,
+    end: (s.end ?? 0) + offset,
+  }));
   return {
     text: acc.text + (acc.text ? " " : "") + (part.text || "").trim(),
     words: acc.words.concat(words),
@@ -98,11 +128,17 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const relPath = searchParams.get("path") || "";
   const chapterStr = searchParams.get("chapter");
-  if (!relPath || chapterStr == null) return NextResponse.json({ error: "Missing path or chapter" }, { status: 400 });
+  if (!relPath || chapterStr == null)
+    return NextResponse.json(
+      { error: "Missing path or chapter" },
+      { status: 400 }
+    );
   const chapIdx = parseInt(chapterStr, 10);
-  if (Number.isNaN(chapIdx)) return NextResponse.json({ error: "Invalid chapter" }, { status: 400 });
+  if (Number.isNaN(chapIdx))
+    return NextResponse.json({ error: "Invalid chapter" }, { status: 400 });
   const safe = getAbsoluteSafePath(relPath);
-  if (!safe.ok) return NextResponse.json({ error: safe.error }, { status: 400 });
+  if (!safe.ok)
+    return NextResponse.json({ error: safe.error }, { status: 400 });
   const { chapterJson } = getTranscriptPaths(safe.path, chapIdx);
   try {
     const content = await fs.readFile(chapterJson, "utf8");
@@ -119,20 +155,37 @@ export async function POST(req: NextRequest) {
     const relPath = String(body.path || "");
     const chapterIdx = Number(body.chapter);
     const force = Boolean(body.force);
-    if (!relPath || !Number.isFinite(chapterIdx)) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    if (!relPath || !Number.isFinite(chapterIdx))
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
     const safe = getAbsoluteSafePath(relPath);
-    if (!safe.ok) return NextResponse.json({ error: safe.error }, { status: 400 });
+    if (!safe.ok)
+      return NextResponse.json({ error: safe.error }, { status: 400 });
 
     const meta = await getMetadata(relPath);
-    if (!meta.ok) return NextResponse.json({ error: meta.error }, { status: meta.status || 500 });
+    if (!meta.ok)
+      return NextResponse.json(
+        { error: meta.error },
+        { status: meta.status || 500 }
+      );
 
     const chapters = meta.chapters || [];
-    if (chapterIdx < 0 || chapterIdx >= chapters.length) return NextResponse.json({ error: "Chapter out of range" }, { status: 400 });
+    if (chapterIdx < 0 || chapterIdx >= chapters.length)
+      return NextResponse.json(
+        { error: "Chapter out of range" },
+        { status: 400 }
+      );
     const start = chapters[chapterIdx].start;
-    const end = chapterIdx + 1 < chapters.length ? chapters[chapterIdx + 1].start : (meta.format.duration || 0);
+    const end =
+      chapterIdx + 1 < chapters.length
+        ? chapters[chapterIdx + 1].start
+        : meta.format.duration || 0;
     const totalDuration = Math.max(0, end - start);
-    if (!Number.isFinite(totalDuration) || totalDuration <= 0) return NextResponse.json({ error: "Invalid chapter duration" }, { status: 400 });
+    if (!Number.isFinite(totalDuration) || totalDuration <= 0)
+      return NextResponse.json(
+        { error: "Invalid chapter duration" },
+        { status: 400 }
+      );
 
     const { sttDir, chapterJson } = getTranscriptPaths(safe.path, chapterIdx);
     await ensureDir(sttDir);
@@ -149,7 +202,11 @@ export async function POST(req: NextRequest) {
       chunks.push({ offset, duration: Math.min(maxChunk, remaining) });
     }
 
-    const acc = { text: "", words: [] as WhisperVerboseWord[], segments: [] as WhisperVerboseSegment[] };
+    const acc = {
+      text: "",
+      words: [] as WhisperVerboseWord[],
+      segments: [] as WhisperVerboseSegment[],
+    };
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "stt-"));
     try {
       for (let i = 0; i < chunks.length; i++) {
@@ -157,13 +214,25 @@ export async function POST(req: NextRequest) {
         const tmpOut = path.join(tmpDir, `chunk-${i}.mp3`);
         // Ensure ffmpeg present
         try {
-          await ffmpegSliceToMp3(safe.path, start + c.offset, c.duration, tmpOut);
+          await ffmpegSliceToMp3(
+            safe.path,
+            start + c.offset,
+            c.duration,
+            tmpOut
+          );
         } catch (e: any) {
           const msg = e?.message || String(e);
-          return NextResponse.json({ error: `ffmpeg failed: ${msg}` }, { status: 500 });
+          return NextResponse.json(
+            { error: `ffmpeg failed: ${msg}` },
+            { status: 500 }
+          );
         }
         const buf = await fs.readFile(tmpOut);
-        const part = await callWhisperVerbose(buf, path.basename(tmpOut), apiKey);
+        const part = await callWhisperVerbose(
+          buf,
+          path.basename(tmpOut),
+          apiKey
+        );
         const offsetAbs = start + c.offset;
         const merged = mergeWithOffset(acc, part, offsetAbs);
         acc.text = merged.text;
@@ -172,7 +241,9 @@ export async function POST(req: NextRequest) {
       }
     } finally {
       // best effort cleanup
-      try { await fs.rm(tmpDir, { recursive: true, force: true }); } catch {}
+      try {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      } catch {}
     }
 
     const out = {
@@ -193,4 +264,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
-
