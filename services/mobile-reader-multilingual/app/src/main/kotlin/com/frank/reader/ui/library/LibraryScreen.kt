@@ -3,6 +3,7 @@ package com.frank.reader.ui.library
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -52,7 +53,9 @@ fun LibraryRoute(
         } catch (_: SecurityException) {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        Log.d("LibraryRoute", "Persisted uri permission for $uri")
         viewModel.onRootSelected(uri)
+        Log.d("LibraryRoute", "Selected library root: $uri")
     }
 
     LibraryScreen(

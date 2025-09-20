@@ -1,5 +1,6 @@
 package com.frank.reader.ui.book
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -103,7 +104,10 @@ fun BookDetailScreen(
                         ListItem(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onOpenReader(index) }
+                                .clickable {
+                                    Log.d("BookDetailScreen", "Opening reader for chapter=$index title=$title")
+                                    onOpenReader(index)
+                                }
                                 .padding(horizontal = 16.dp),
                             headlineContent = { Text(title) },
                             supportingContent = { Text("Tap to open") }

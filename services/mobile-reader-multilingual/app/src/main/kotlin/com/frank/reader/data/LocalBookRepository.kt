@@ -2,7 +2,9 @@ package com.frank.reader.data
 
 import android.content.ContentResolver
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.frank.reader.data.sample.SampleDataInstaller
 import com.frank.reader.model.AudioSource
@@ -12,6 +14,7 @@ import com.frank.reader.model.ChapterContent
 import com.frank.reader.model.ChapterSource
 import com.frank.reader.model.TranscriptChapter
 import com.frank.reader.model.TranslationChapter
+import androidx.media3.common.MimeTypes
 import com.frank.reader.prefs.LibraryRoot
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -133,6 +136,21 @@ class LocalBookRepository @Inject constructor(
                 file.isFile && file.name?.lowercase(Locale.ROOT)?.endsWith(".m4b") == true
             } ?: return@mapNotNull null
 
+            val canOpen = context.contentResolver.runCatching {
+                openFileDescriptor(audioFile.uri, "r")?.use { }
+                true
+            }.onFailure {
+                Log.w("LocalBookRepository", "Failed to open audio uri=${audioFile.uri}", it)
+            }.getOrDefault(false)
+
+            val audioInfo = resolveAudioInfo(audioFile)
+            Log.d(
+                "LocalBookRepository",
+                "Book ${bookDir.name ?: "(unknown)"} audio=${audioFile.uri} readable=$canOpen size=${audioFile.length()} durationMs=${audioInfo?.durationMs} mime=${audioInfo?.mimeType}"
+            )
+
+            val mimeType = audioInfo?.mimeType ?: MimeTypes.AUDIO_MP4
+
             val transcriptDir = bookDir.findFile(".stt")
             val sttFiles = when {
                 transcriptDir == null -> collectDocumentFiles(bookDir)
@@ -140,9 +158,14 @@ class LocalBookRepository @Inject constructor(
                 else -> collectDocumentFiles(transcriptDir)
             }
 
-            val transcriptFiles = sttFiles.filter { file ->
-                file.name.orEmpty().endsWith(".json") && !file.name.orEmpty().contains(".translation-")
-            }.sortedBy { it.name.orEmpty() }
+            val transcriptFiles = sttFiles
+                .filter { file ->
+                    file.name.orEmpty().endsWith(".json") && !file.name.orEmpty().contains(".translation-")
+                }
+                .sortedWith(compareBy(
+                    { extractChapterIndex(it.name.orEmpty()) ?: Int.MAX_VALUE },
+                    { it.name.orEmpty() }
+                ))
 
             if (transcriptFiles.isEmpty()) return@mapNotNull null
 
@@ -171,7 +194,7 @@ class LocalBookRepository @Inject constructor(
 
                 BookChapterMeta(
                     index = index,
-                    displayName = baseName.replace('_', ' ').replaceFirstChar { it.titlecase(Locale.ROOT) },
+                    displayName = prettifyChapterTitle(baseName),
                     source = ChapterSource.Document(
                         transcriptUri = transcriptFile.uri,
                         translationUris = translations
@@ -182,10 +205,46 @@ class LocalBookRepository @Inject constructor(
             BookSummary(
                 id = bookDir.uri.toString(),
                 title = bookDir.name ?: "Book",
-                audio = AudioSource(audioFile.uri, mimeType = null),
+                audio = AudioSource(audioFile.uri, mimeType = mimeType),
                 chapters = chapters,
                 availableLanguages = chapters.flatMap { it.languages }.toSet()
             )
+        }
+    }
+
+    private fun resolveAudioInfo(file: DocumentFile): AudioInfo? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, file.uri)
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+            AudioInfo(durationMs = duration, mimeType = mime)
+        } catch (t: Throwable) {
+            Log.w("LocalBookRepository", "Unable to read metadata for ${file.uri}", t)
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private data class AudioInfo(val durationMs: Long?, val mimeType: String?)
+}
+
+private fun extractChapterIndex(name: String): Int? {
+    val withoutExtension = name.substringBefore(".translation-").substringBeforeLast('.')
+    val digits = withoutExtension.takeLastWhile { it.isDigit() }
+    return digits.toIntOrNull()
+}
+
+private fun prettifyChapterTitle(raw: String): String {
+    val cleaned = raw.replace('_', ' ').replace('-', ' ').trim()
+    if (cleaned.isEmpty()) return "Chapter"
+    return cleaned.split(' ').filter { it.isNotBlank() }.joinToString(" ") { part ->
+        part.replaceFirstChar { ch ->
+            if (ch.isLowerCase()) ch.titlecase(Locale.ROOT) else ch.toString()
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.frank.reader.ui.reader
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -81,8 +82,15 @@ class ReaderViewModel @Inject constructor(
     private var resumeApplied = false
     private var segmentIndexFinder: SegmentIndexFinder? = null
     private var saveJob: Job? = null
+    private var lastPreparedBookId: String? = null
+    private var lastPreparedChapterIndex: Int? = null
+    private var lastLoggedDurationMs: Long = -1L
 
     init {
+        Log.d(
+            "ReaderViewModel",
+            "Initializing with bookId=$bookId initialChapter=$initialChapter"
+        )
         viewModelScope.launch {
             preferences.settings.collectLatest { settings ->
                 lastSettings = settings
@@ -99,6 +107,10 @@ class ReaderViewModel @Inject constructor(
                 val summary = repository.loadBook(root, bookId)
                 bookSummary.value = summary
                 if (summary != null) {
+                    Log.d(
+                        "ReaderViewModel",
+                        "Book summary loaded id=${summary.id} audio=${summary.audio.uri} chapters=${summary.chapters.size}"
+                    )
                     _uiState.update {
                         it.copy(
                             bookTitle = summary.title,
@@ -107,6 +119,10 @@ class ReaderViewModel @Inject constructor(
                         )
                     }
                 } else {
+                    Log.w(
+                        "ReaderViewModel",
+                        "No summary found for bookId=$bookId root=$root"
+                    )
                     _uiState.update { it.copy(errorMessage = "Book not found", isLoading = false) }
                 }
             }
@@ -121,12 +137,20 @@ class ReaderViewModel @Inject constructor(
             ) { root, summary, chapterIdx, language ->
                 LoadRequest(root, summary, chapterIdx, language)
             }.collectLatest { request ->
+                Log.d(
+                    "ReaderViewModel",
+                    "LoadRequest received root=${request.root} book=${request.summary.id} chapter=${request.chapterIndex} language=${request.language}"
+                )
                 loadChapter(request)
             }
         }
 
         viewModelScope.launch {
             playerController.snapshot.collect { snapshot ->
+                Log.v(
+                    "ReaderViewModel",
+                    "Snapshot mediaId=${snapshot.mediaItemId} pos=${snapshot.positionMs} duration=${snapshot.durationMs} playing=${snapshot.isPlaying}"
+                )
                 applySnapshot(snapshot)
             }
         }
@@ -146,6 +170,10 @@ class ReaderViewModel @Inject constructor(
     )
 
     private suspend fun loadChapter(request: LoadRequest) {
+        Log.d(
+            "ReaderViewModel",
+            "Loading chapter index=${request.chapterIndex} language=${request.language} root=${request.root}"
+        )
         _uiState.update { it.copy(isLoading = true, currentChapterIndex = request.chapterIndex) }
         val chapter = repository.loadChapter(
             request.root,
@@ -154,6 +182,7 @@ class ReaderViewModel @Inject constructor(
             request.language
         )
         if (chapter == null) {
+            Log.w("ReaderViewModel", "Failed to load chapter index=${request.chapterIndex}")
             _uiState.update { it.copy(isLoading = false, errorMessage = "Unable to load chapter") }
             return
         }
@@ -161,12 +190,15 @@ class ReaderViewModel @Inject constructor(
         segmentIndexFinder = SegmentIndexFinder(chapter.transcript.segments)
 
         val segmentModels = chapter.transcript.segments.mapIndexed { index, segment ->
+            val startMs = (segment.start * 1000).toLong().coerceAtLeast(0L)
+            val endMsCandidate = (segment.end * 1000).toLong().coerceAtLeast(0L)
+            val endMs = endMsCandidate.coerceAtLeast(startMs)
             SegmentUiModel(
                 index = index,
                 transcriptText = segment.text.trim(),
                 translationText = chapter.alignment.translationTexts.getOrNull(index),
-                startMs = (segment.start * 1000).toLong(),
-                endMs = (segment.end * 1000).toLong()
+                startMs = startMs,
+                endMs = endMs
             )
         }
 
@@ -179,31 +211,97 @@ class ReaderViewModel @Inject constructor(
             )
         }
 
-        preparePlayer(request.summary, request.chapterIndex)
-        val lastPosition = lastSettings?.takeIf { it.lastBookId == bookId && it.lastChapterIndex == request.chapterIndex }?.lastPositionMs ?: 0L
-        if (lastPosition > 0 && !resumeApplied) {
-            _uiState.update { it.copy(playbackPositionMs = lastPosition) }
-        }
+        Log.d(
+            "ReaderViewModel",
+            "Loaded chapter=${request.chapterIndex} segments=${segmentModels.size} translation=${chapter.alignment.translationLanguage}"
+        )
+
+        val chapterStartMs = computeChapterStartMs(chapter)
+        val shouldResetPosition = lastPreparedBookId != request.summary.id || lastPreparedChapterIndex != request.chapterIndex
+        Log.d(
+            "ReaderViewModel",
+            "Preparing player for chapter=${request.chapterIndex} reset=$shouldResetPosition startMs=$chapterStartMs"
+        )
+        preparePlayer(
+            summary = request.summary,
+            chapterIdx = request.chapterIndex,
+            chapterStartMs = chapterStartMs,
+            resetPosition = shouldResetPosition
+        )
     }
 
-    private fun preparePlayer(summary: BookSummary, chapterIdx: Int) {
+    private fun preparePlayer(
+        summary: BookSummary,
+        chapterIdx: Int,
+        chapterStartMs: Long,
+        resetPosition: Boolean
+    ) {
         val resumePosition = if (!resumeApplied) {
             val settings = lastSettings
             if (settings?.lastBookId == bookId && settings.lastChapterIndex == chapterIdx) {
                 resumeApplied = true
                 settings.lastPositionMs
-            } else 0L
-        } else 0L
+            } else null
+        } else null
+
+        val targetPosition = resumePosition ?: if (resetPosition) chapterStartMs else null
+
+        val shouldResumePlayback = targetPosition == null && uiState.value.isPlaying
+
+        Log.d(
+            "ReaderViewModel",
+            "Calling player.prepare mediaId=${summary.id}#${chapterIdx} targetPosition=$targetPosition shouldResume=$shouldResumePlayback"
+        )
 
         playerController.prepare(
             mediaId = "${summary.id}#${chapterIdx}",
             audioSource = summary.audio,
-            resumePositionMs = resumePosition,
-            playWhenReady = false
+            resumePositionMs = targetPosition,
+            playWhenReady = shouldResumePlayback
         )
+
+        if (targetPosition != null) {
+            val active = segmentIndexFinder?.findActiveIndex(targetPosition) ?: -1
+            _uiState.update {
+                it.copy(
+                    playbackPositionMs = targetPosition,
+                    activeSegmentIndex = active
+                )
+            }
+        }
+
+        lastPreparedBookId = summary.id
+        lastPreparedChapterIndex = chapterIdx
     }
 
+    private fun computeChapterStartMs(chapter: ChapterContent): Long {
+        val candidates = mutableListOf<Double>()
+        val transcriptStart = chapter.transcript.start
+        if (transcriptStart.isValidFinite()) {
+            candidates.add(transcriptStart)
+        }
+        chapter.transcript.segments.minOfOrNull { it.start }?.let { segmentStart ->
+            if (segmentStart.isValidFinite()) {
+                candidates.add(segmentStart)
+            }
+        }
+        val minStartSeconds = candidates.minOrNull() ?: 0.0
+        return (minStartSeconds * 1000.0).toLong().coerceAtLeast(0L)
+    }
+
+    private fun Double.isValidFinite(): Boolean = !isNaN() && !isInfinite()
+
     private fun applySnapshot(snapshot: PlayerSnapshot) {
+        if (snapshot.durationMs > 0 && snapshot.durationMs != lastLoggedDurationMs) {
+            lastLoggedDurationMs = snapshot.durationMs
+            Log.d(
+                "ReaderViewModel",
+                "Player duration reported=${snapshot.durationMs}ms (~${snapshot.durationMs / 1000.0}s)"
+            )
+        }
+        snapshot.error?.let { error ->
+            Log.e("ReaderViewModel", "Player error received", error)
+        }
         val finder = segmentIndexFinder
         val active = if (finder != null) finder.findActiveIndex(snapshot.positionMs) else -1
         _uiState.update {
@@ -232,26 +330,37 @@ class ReaderViewModel @Inject constructor(
         )
     }
 
-    fun onTogglePlayPause() = playerController.togglePlayPause()
+    fun onTogglePlayPause() {
+        Log.d("ReaderViewModel", "onTogglePlayPause")
+        playerController.togglePlayPause()
+    }
 
     fun onSeekTo(fraction: Float) {
         val duration = uiState.value.durationMs.takeIf { it > 0 } ?: return
+        Log.d(
+            "ReaderViewModel",
+            "onSeekTo fraction=$fraction duration=$duration"
+        )
         playerController.seekTo((duration * fraction.coerceIn(0f, 1f)).toLong())
     }
 
     fun onSegmentTapped(index: Int) {
+        Log.d("ReaderViewModel", "onSegmentTapped index=$index")
         uiState.value.segments.getOrNull(index)?.let { playerController.seekTo(it.startMs) }
     }
 
     fun onSelectChapter(index: Int) {
+        Log.d("ReaderViewModel", "onSelectChapter index=$index")
         chapterIndex.value = index.coerceIn(0, (uiState.value.chapterTitles.lastIndex).coerceAtLeast(0))
     }
 
     fun onSelectLanguage(language: String?) {
+        Log.d("ReaderViewModel", "onSelectLanguage language=$language")
         languageSelection.value = language
     }
 
     fun onLayoutPreferenceChange(mode: TranscriptPaneMode?) {
+        Log.d("ReaderViewModel", "onLayoutPreferenceChange mode=$mode")
         layoutPreference.value = mode
     }
 

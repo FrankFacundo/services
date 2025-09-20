@@ -1,6 +1,7 @@
 package com.frank.reader.ui.navigation
 
 import android.net.Uri
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
@@ -49,7 +50,10 @@ fun ReaderNavGraph(
             BookDetailRoute(
                 bookId = bookId,
                 onNavigateBack = { navController.popBackStack() },
-                onOpenReader = { chapterIndex -> navController.navigate(Destinations.reader(bookId, chapterIndex)) }
+                onOpenReader = { chapterIndex ->
+                    Log.d("ReaderNavGraph", "Navigating to reader book=$bookId chapter=$chapterIndex")
+                    navController.navigate(Destinations.reader(bookId, chapterIndex))
+                }
             )
         }
         composable(
@@ -62,6 +66,7 @@ fun ReaderNavGraph(
             val encodedBookId = it.arguments?.getString("bookId") ?: return@composable
             val bookId = Uri.decode(encodedBookId)
             val chapterIndex = it.arguments?.getInt("chapterIndex") ?: 0
+            Log.d("ReaderNavGraph", "Launching ReaderRoute book=$bookId chapterIndex=$chapterIndex")
             ReaderRoute(
                 bookId = bookId,
                 windowSizeClass = windowSizeClass,
