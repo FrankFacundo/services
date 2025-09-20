@@ -1,9 +1,8 @@
 package com.frank.reader
 
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -34,13 +33,15 @@ class ReaderFlowTest {
         composeRule.onNodeWithText("Chapter 1").performClick()
 
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodes(hasTestTag("translationSegment_1")).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("translationSegment_1")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
         }
 
         composeRule.onNodeWithTag("translationSegment_1").performClick()
 
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodes(hasTestTag("translationSegment_1"))
+            composeRule.onAllNodesWithTag("translationSegment_1")
                 .fetchSemanticsNodes()
                 .any { node -> node.config.getOrNull(SegmentActiveKey) == true }
         }
