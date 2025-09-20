@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.frank.reader.model.AudioSource
@@ -26,6 +27,7 @@ data class PlayerSnapshot(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val bufferedPositionMs: Long = 0L,
+    val playbackSpeed: Float = 1f,
     val error: PlaybackException? = null
 )
 
@@ -80,7 +82,8 @@ class PlayerController @Inject constructor(
                 isPlaying = exoPlayer.isPlaying,
                 positionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
                 durationMs = if (reportedDuration > 0) reportedDuration else it.durationMs,
-                bufferedPositionMs = exoPlayer.bufferedPosition
+                bufferedPositionMs = exoPlayer.bufferedPosition,
+                playbackSpeed = exoPlayer.playbackParameters.speed
             )
         }
     }
@@ -137,6 +140,30 @@ class PlayerController @Inject constructor(
     fun seekTo(positionMs: Long) {
         Log.d("PlayerController", "seekTo($positionMs) called currentDuration=${exoPlayer.duration}")
         exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
+    }
+
+    fun seekBy(deltaMs: Long) {
+        val current = exoPlayer.currentPosition.coerceAtLeast(0L)
+        val duration = exoPlayer.duration.takeIf { it > 0 } ?: _snapshot.value.durationMs
+        val maxPosition = if (duration > 0) duration else Long.MAX_VALUE
+        val target = (current + deltaMs).coerceIn(0L, maxPosition)
+        Log.d("PlayerController", "seekBy($deltaMs) -> target=$target current=$current duration=$duration")
+        seekTo(target)
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        if (speed <= 0f) {
+            Log.w("PlayerController", "Ignoring non-positive playback speed=$speed")
+            return
+        }
+        val current = exoPlayer.playbackParameters
+        if (current.speed == speed) {
+            Log.d("PlayerController", "Playback speed already $speed")
+            return
+        }
+        Log.d("PlayerController", "Setting playback speed to $speed")
+        exoPlayer.playbackParameters = PlaybackParameters(speed, current.pitch)
+        _snapshot.update { it.copy(playbackSpeed = speed) }
     }
 
     fun release() {

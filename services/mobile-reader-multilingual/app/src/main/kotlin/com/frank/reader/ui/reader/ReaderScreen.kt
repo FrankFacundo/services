@@ -2,19 +2,27 @@ package com.frank.reader.ui.reader
 
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AssistChip
@@ -31,6 +39,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
@@ -49,6 +58,8 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,7 +69,9 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowLayoutInfo
+import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 val SegmentActiveKey = SemanticsPropertyKey<Boolean>("SegmentActive")
 var SemanticsPropertyReceiver.segmentActive by SegmentActiveKey
@@ -90,6 +103,10 @@ fun ReaderRoute(
         onNavigateBack = onNavigateBack,
         onTogglePlayPause = viewModel::onTogglePlayPause,
         onSeekTo = viewModel::onSeekTo,
+        onSeekBackward = viewModel::onSeekBackward,
+        onSeekForward = viewModel::onSeekForward,
+        onSkipAmountSelected = viewModel::onSelectSkipSeconds,
+        onPlaybackSpeedSelected = viewModel::onSelectPlaybackSpeed,
         onSelectChapter = viewModel::onSelectChapter,
         onSelectLanguage = viewModel::onSelectLanguage,
         onSegmentTapped = viewModel::onSegmentTapped,
@@ -105,6 +122,10 @@ fun ReaderScreen(
     onNavigateBack: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onSeekTo: (Float) -> Unit,
+    onSeekBackward: () -> Unit,
+    onSeekForward: () -> Unit,
+    onSkipAmountSelected: (Int) -> Unit,
+    onPlaybackSpeedSelected: (Float) -> Unit,
     onSelectChapter: (Int) -> Unit,
     onSelectLanguage: (String?) -> Unit,
     onSegmentTapped: (Int) -> Unit,
@@ -152,48 +173,66 @@ fun ReaderScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            ControlSection(
+            HeaderControls(
                 state = state,
-                onTogglePlayPause = onTogglePlayPause,
-                onSeekTo = onSeekTo,
                 onSelectChapter = onSelectChapter,
                 onSelectLanguage = onSelectLanguage,
                 onLayoutPreferenceChange = onLayoutPreferenceChange,
                 paneMode = paneMode
             )
 
-            when {
-                state.isLoading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Loading chapter…", textAlign = TextAlign.Center)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when {
+                    state.isLoading -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Loading chapter…", textAlign = TextAlign.Center)
+                        }
                     }
-                }
 
-                state.segments.isEmpty() -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No transcript for this chapter.", textAlign = TextAlign.Center)
+                    state.segments.isEmpty() -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No transcript for this chapter.", textAlign = TextAlign.Center)
+                        }
                     }
-                }
 
-                else -> {
-                    TranscriptPane(
-                        state = state,
-                        paneMode = paneMode,
-                        originalListState = originalListState,
-                        translationListState = translationListState,
-                        onSegmentTapped = onSegmentTapped
-                    )
+                    else -> {
+                        TranscriptPane(
+                            state = state,
+                            paneMode = paneMode,
+                            originalListState = originalListState,
+                            translationListState = translationListState,
+                            onSegmentTapped = onSegmentTapped
+                        )
+                    }
                 }
             }
+
+            PlaybackControls(
+                isPlaying = state.isPlaying,
+                positionMs = state.playbackPositionMs,
+                durationMs = state.durationMs,
+                selectedSkipSeconds = state.selectedSkipSeconds,
+                skipOptionsSeconds = state.skipOptionsSeconds,
+                playbackSpeed = state.playbackSpeed,
+                playbackSpeedOptions = state.playbackSpeedOptions,
+                onTogglePlayPause = onTogglePlayPause,
+                onSeekTo = onSeekTo,
+                onSeekBackward = onSeekBackward,
+                onSeekForward = onSeekForward,
+                onSkipAmountSelected = onSkipAmountSelected,
+                onPlaybackSpeedSelected = onPlaybackSpeedSelected
+            )
         }
     }
 }
 
 @Composable
-private fun ControlSection(
+private fun HeaderControls(
     state: ReaderUiState,
-    onTogglePlayPause: () -> Unit,
-    onSeekTo: (Float) -> Unit,
     onSelectChapter: (Int) -> Unit,
     onSelectLanguage: (String?) -> Unit,
     onLayoutPreferenceChange: (TranscriptPaneMode?) -> Unit,
@@ -222,14 +261,7 @@ private fun ControlSection(
             translationAvailable = state.selectedLanguage != null,
             onLayoutPreferenceChange = onLayoutPreferenceChange
         )
-
-        PlaybackControls(
-            isPlaying = state.isPlaying,
-            positionMs = state.playbackPositionMs,
-            durationMs = state.durationMs,
-            onTogglePlayPause = onTogglePlayPause,
-            onSeekTo = onSeekTo
-        )
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
@@ -403,13 +435,22 @@ private fun SegmentRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlaybackControls(
     isPlaying: Boolean,
     positionMs: Long,
     durationMs: Long,
+    selectedSkipSeconds: Int,
+    skipOptionsSeconds: List<Int>,
+    playbackSpeed: Float,
+    playbackSpeedOptions: List<Float>,
     onTogglePlayPause: () -> Unit,
-    onSeekTo: (Float) -> Unit
+    onSeekTo: (Float) -> Unit,
+    onSeekBackward: () -> Unit,
+    onSeekForward: () -> Unit,
+    onSkipAmountSelected: (Int) -> Unit,
+    onPlaybackSpeedSelected: (Float) -> Unit
 ) {
     val duration = if (durationMs > 0) durationMs else 1L
     var sliderPosition by remember { mutableFloatStateOf(0f) }
@@ -421,18 +462,44 @@ private fun PlaybackControls(
         }
     }
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IconButton(onClick = onTogglePlayPause) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play"
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+        ) {
+            SkipControlButton(
+                modifier = Modifier,
+                label = "-${selectedSkipSeconds}s",
+                contentDescription = "Skip backward $selectedSkipSeconds seconds",
+                icon = Icons.Filled.FastRewind,
+                skipOptions = skipOptionsSeconds,
+                selectedSkipSeconds = selectedSkipSeconds,
+                onSkip = onSeekBackward,
+                onSkipOptionSelected = onSkipAmountSelected
+            )
+            IconButton(onClick = onTogglePlayPause) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play"
+                )
+            }
+            SkipControlButton(
+                modifier = Modifier,
+                label = "+${selectedSkipSeconds}s",
+                contentDescription = "Skip forward $selectedSkipSeconds seconds",
+                icon = Icons.Filled.FastForward,
+                skipOptions = skipOptionsSeconds,
+                selectedSkipSeconds = selectedSkipSeconds,
+                onSkip = onSeekForward,
+                onSkipOptionSelected = onSkipAmountSelected
             )
         }
-        Column(modifier = Modifier.weight(1f)) {
+
+        Column {
             Slider(
                 value = sliderPosition,
                 onValueChange = {
@@ -450,6 +517,72 @@ private fun PlaybackControls(
             ) {
                 Text(formatTime(positionMs), style = MaterialTheme.typography.labelSmall)
                 Text(formatTime(durationMs), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            playbackSpeedOptions.forEachIndexed { index, speed ->
+                SegmentedButton(
+                    selected = speed == playbackSpeed,
+                    onClick = { onPlaybackSpeedSelected(speed) },
+                    shape = SegmentedButtonDefaults.itemShape(index, playbackSpeedOptions.size)
+                ) {
+                    Text(speed.formatSpeedLabel())
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SkipControlButton(
+    modifier: Modifier = Modifier,
+    label: String,
+    contentDescription: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    skipOptions: List<Int>,
+    selectedSkipSeconds: Int,
+    onSkip: () -> Unit,
+    onSkipOptionSelected: (Int) -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        Surface(
+            modifier = Modifier
+                .combinedClickable(
+                    role = Role.Button,
+                    onClick = onSkip,
+                    onLongClick = { menuExpanded = true }
+                )
+                .semantics { this.contentDescription = contentDescription },
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(imageVector = icon, contentDescription = null)
+                Text(text = label, style = MaterialTheme.typography.labelLarge)
+                Icon(imageVector = Icons.Filled.ExpandMore, contentDescription = null)
+            }
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            skipOptions.forEach { seconds ->
+                DropdownMenuItem(
+                    text = { Text("$seconds seconds") },
+                    trailingIcon = if (seconds == selectedSkipSeconds) {
+                        { Icon(imageVector = Icons.Filled.Check, contentDescription = null) }
+                    } else null,
+                    onClick = {
+                        onSkipOptionSelected(seconds)
+                        menuExpanded = false
+                    }
+                )
             }
         }
     }
@@ -550,6 +683,16 @@ private fun TranscriptPaneMode.toLabel(): String = when (this) {
     TranscriptPaneMode.Vertical -> "Stack"
     TranscriptPaneMode.SingleOriginal -> "Original"
     TranscriptPaneMode.SingleTranslation -> "Trans"
+}
+
+private fun Float.formatSpeedLabel(): String {
+    val isWhole = abs(this - this.toInt()) < 0.001f
+    val numeric = if (isWhole) {
+        this.toInt().toString()
+    } else {
+        String.format(Locale.US, "%.2f", this).trimEnd('0').trimEnd('.')
+    }
+    return numeric + "x"
 }
 
 private fun formatTime(positionMs: Long): String {

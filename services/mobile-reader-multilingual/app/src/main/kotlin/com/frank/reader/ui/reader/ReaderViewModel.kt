@@ -40,7 +40,11 @@ data class ReaderUiState(
     val bufferedPositionMs: Long = 0,
     val isPlaying: Boolean = false,
     val errorMessage: String? = null,
-    val layoutPreference: TranscriptPaneMode? = null
+    val layoutPreference: TranscriptPaneMode? = null,
+    val skipOptionsSeconds: List<Int> = listOf(1, 3, 5, 10, 15, 20),
+    val selectedSkipSeconds: Int = 15,
+    val playbackSpeedOptions: List<Float> = listOf(0.75f, 1f, 1.25f, 1.5f, 2f),
+    val playbackSpeed: Float = 1f
 )
 
 data class SegmentUiModel(
@@ -310,6 +314,7 @@ class ReaderViewModel @Inject constructor(
                 durationMs = snapshot.durationMs,
                 bufferedPositionMs = snapshot.bufferedPositionMs,
                 isPlaying = snapshot.isPlaying,
+                playbackSpeed = snapshot.playbackSpeed,
                 activeSegmentIndex = active
             )
         }
@@ -342,6 +347,43 @@ class ReaderViewModel @Inject constructor(
             "onSeekTo fraction=$fraction duration=$duration"
         )
         playerController.seekTo((duration * fraction.coerceIn(0f, 1f)).toLong())
+    }
+
+    fun onSeekBackward() {
+        val seconds = uiState.value.selectedSkipSeconds
+        Log.d("ReaderViewModel", "onSeekBackward seconds=$seconds")
+        playerController.seekBy(-seconds * 1000L)
+    }
+
+    fun onSeekForward() {
+        val seconds = uiState.value.selectedSkipSeconds
+        Log.d("ReaderViewModel", "onSeekForward seconds=$seconds")
+        playerController.seekBy(seconds * 1000L)
+    }
+
+    fun onSelectSkipSeconds(seconds: Int) {
+        if (seconds <= 0) {
+            Log.w("ReaderViewModel", "Ignoring non-positive skip seconds=$seconds")
+            return
+        }
+        val options = uiState.value.skipOptionsSeconds
+        if (seconds !in options) {
+            Log.w("ReaderViewModel", "Ignoring skip seconds=$seconds not in options=$options")
+            return
+        }
+        Log.d("ReaderViewModel", "onSelectSkipSeconds seconds=$seconds")
+        _uiState.update { it.copy(selectedSkipSeconds = seconds) }
+    }
+
+    fun onSelectPlaybackSpeed(speed: Float) {
+        val options = uiState.value.playbackSpeedOptions
+        if (speed !in options) {
+            Log.w("ReaderViewModel", "Ignoring playback speed=$speed not in options=$options")
+            return
+        }
+        Log.d("ReaderViewModel", "onSelectPlaybackSpeed speed=$speed")
+        playerController.setPlaybackSpeed(speed)
+        _uiState.update { it.copy(playbackSpeed = speed) }
     }
 
     fun onSegmentTapped(index: Int) {
