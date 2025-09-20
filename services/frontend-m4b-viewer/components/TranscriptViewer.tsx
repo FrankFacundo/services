@@ -54,6 +54,10 @@ export default function TranscriptViewer({ relPath, chapterIndex }: { relPath: s
   const [translating, setTranslating] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const originalContainerRef = useRef<HTMLDivElement | null>(null);
+  const translationContainerRef = useRef<HTMLDivElement | null>(null);
+  const originalSegmentRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  const translationSegmentRefs = useRef<(HTMLParagraphElement | null)[]>([]);
 
   const fetchTranscript = async () => {
     setLoading(true); setError(null);
@@ -185,6 +189,58 @@ export default function TranscriptViewer({ relPath, chapterIndex }: { relPath: s
     return { segIdx, wordIdx };
   }, [data, currentTime]);
 
+  const segments = useMemo<Segment[]>(() => {
+    if (!data) return [];
+    if (data.segments && data.segments.length > 0) return data.segments;
+    return [{ start: data.start, end: data.end, text: data.text }];
+  }, [data]);
+
+  const words = useMemo(() => data?.words || [], [data]);
+
+  const translationSegments = useMemo(() => translation?.segments || [], [translation]);
+  const translationActiveIdx = useMemo(() => {
+    if (!translationSegments.length) return -1;
+    const t = currentTime;
+    let segIdx = translationSegments.findIndex((s) => t >= s.start && t < s.end);
+    if (segIdx < 0) {
+      for (let i = translationSegments.length - 1; i >= 0; i--) {
+        if (t >= translationSegments[i].start) { segIdx = i; break; }
+      }
+    }
+    return segIdx;
+  }, [translationSegments, currentTime]);
+
+  function ensureVisible(el: HTMLElement | null, container: HTMLElement | null) {
+    if (!el) return;
+    if (!container) {
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      return;
+    }
+    const margin = 16;
+    const offsetTop = el.offsetTop;
+    const offsetBottom = offsetTop + el.offsetHeight;
+    const viewTop = container.scrollTop;
+    const viewBottom = viewTop + container.clientHeight;
+    if (offsetTop < viewTop + margin) {
+      container.scrollTo({ top: Math.max(0, offsetTop - margin), behavior: "smooth" });
+    } else if (offsetBottom > viewBottom - margin) {
+      const newTop = offsetBottom - container.clientHeight + margin;
+      container.scrollTo({ top: Math.max(0, newTop), behavior: "smooth" });
+    }
+  }
+
+  useEffect(() => {
+    if (active.segIdx < 0) return;
+    const target = originalSegmentRefs.current[active.segIdx];
+    ensureVisible(target ?? null, originalContainerRef.current);
+  }, [active.segIdx, segments.length]);
+
+  useEffect(() => {
+    if (translationActiveIdx == null || translationActiveIdx < 0) return;
+    const target = translationSegmentRefs.current[translationActiveIdx];
+    ensureVisible(target ?? null, translationContainerRef.current);
+  }, [translationActiveIdx, translationSegments.length]);
+
   function togglePlay() {
     const el = audioRef.current; if (!el) return;
     el.paused ? el.play() : el.pause();
@@ -194,9 +250,8 @@ export default function TranscriptViewer({ relPath, chapterIndex }: { relPath: s
   if (error) return <div className="text-sm text-red-600">{error}</div>;
   if (!data) return <div className="text-sm text-gray-600 dark:text-gray-300">No transcript found.</div>;
 
-  const segments = data.segments || [{ start: data.start, end: data.end, text: data.text }];
-  const words = data.words || [];
-  const translationSegments = translation?.segments || [];
+  originalSegmentRefs.current.length = segments.length;
+  translationSegmentRefs.current.length = translationSegments.length;
   const translationReady = Boolean(translation && !translationMissing && !translationError);
   const buttonLabel = translating
     ? "Translating…"
@@ -239,7 +294,10 @@ export default function TranscriptViewer({ relPath, chapterIndex }: { relPath: s
       </div>
       {translationError && <div className="text-sm text-red-600">{translationError}</div>}
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
+        <div
+          ref={originalContainerRef}
+          className="space-y-2 relative max-h-[70vh] overflow-y-auto pr-2"
+        >
           <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Original transcript</h4>
           {segments.map((s, i) => {
             const segWords = words.filter((w) => (w.end ?? 0) > s.start && (w.start ?? 0) < s.end);
@@ -247,6 +305,7 @@ export default function TranscriptViewer({ relPath, chapterIndex }: { relPath: s
             return (
               <p
                 key={i}
+                ref={(el) => { originalSegmentRefs.current[i] = el; }}
                 className={`leading-relaxed px-2 rounded whitespace-pre-wrap ${isActive ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
               >
                 {segWords.length > 0 ? (
@@ -270,7 +329,10 @@ export default function TranscriptViewer({ relPath, chapterIndex }: { relPath: s
             );
           })}
         </div>
-        <div className="space-y-2">
+        <div
+          ref={translationContainerRef}
+          className="space-y-2 relative max-h-[70vh] overflow-y-auto pr-2"
+        >
           <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Translation</h4>
           {translationLoading && (
             <div className="text-sm text-gray-600 dark:text-gray-300">Loading translation…</div>
@@ -285,10 +347,11 @@ export default function TranscriptViewer({ relPath, chapterIndex }: { relPath: s
           )}
           {translationReady && translationSegments.length > 0 && (
             translationSegments.map((seg, i) => {
-              const isActive = active.segIdx === i;
+              const isActive = translationActiveIdx === i;
               return (
                 <p
                   key={`${seg.start}-${seg.end}-${i}`}
+                  ref={(el) => { translationSegmentRefs.current[i] = el; }}
                   onClick={() => {
                     const el = audioRef.current;
                     if (el) el.currentTime = Math.max(0, seg.start - 0.05);
