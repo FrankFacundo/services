@@ -1,5 +1,6 @@
 package com.frank.reader.ui.navigation
 
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
@@ -17,8 +18,8 @@ object Destinations {
     const val Book = "book"
     const val Reader = "reader"
 
-    fun book(bookId: String) = "book/$bookId"
-    fun reader(bookId: String, chapterIndex: Int) = "reader/$bookId/$chapterIndex"
+    fun book(bookId: String) = "book/${Uri.encode(bookId)}"
+    fun reader(bookId: String, chapterIndex: Int) = "reader/${Uri.encode(bookId)}/$chapterIndex"
 }
 
 @Composable
@@ -43,7 +44,8 @@ fun ReaderNavGraph(
             route = "${Destinations.Book}/{bookId}",
             arguments = listOf(navArgument("bookId") { type = NavType.StringType })
         ) {
-            val bookId = it.arguments?.getString("bookId") ?: return@composable
+            val encodedBookId = it.arguments?.getString("bookId") ?: return@composable
+            val bookId = Uri.decode(encodedBookId)
             BookDetailRoute(
                 bookId = bookId,
                 onNavigateBack = { navController.popBackStack() },
@@ -57,7 +59,8 @@ fun ReaderNavGraph(
                 navArgument("chapterIndex") { type = NavType.IntType }
             )
         ) {
-            val bookId = it.arguments?.getString("bookId") ?: return@composable
+            val encodedBookId = it.arguments?.getString("bookId") ?: return@composable
+            val bookId = Uri.decode(encodedBookId)
             val chapterIndex = it.arguments?.getInt("chapterIndex") ?: 0
             ReaderRoute(
                 bookId = bookId,

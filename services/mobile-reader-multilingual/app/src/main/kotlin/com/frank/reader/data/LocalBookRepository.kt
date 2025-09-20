@@ -133,27 +133,41 @@ class LocalBookRepository @Inject constructor(
                 file.isFile && file.name?.lowercase(Locale.ROOT)?.endsWith(".m4b") == true
             } ?: return@mapNotNull null
 
-            val transcriptDir = bookDir.findFile(".stt") ?: return@mapNotNull null
-            val transcriptFiles = transcriptDir.listFiles().filter { file ->
-                file.isFile && file.name.orEmpty().endsWith(".json") && !file.name.orEmpty().contains(".translation-")
+            val transcriptDir = bookDir.findFile(".stt")
+            val sttFiles = when {
+                transcriptDir == null -> collectDocumentFiles(bookDir)
+                transcriptDir.isFile -> listOf(transcriptDir)
+                else -> collectDocumentFiles(transcriptDir)
+            }
+
+            val transcriptFiles = sttFiles.filter { file ->
+                file.name.orEmpty().endsWith(".json") && !file.name.orEmpty().contains(".translation-")
             }.sortedBy { it.name.orEmpty() }
 
             if (transcriptFiles.isEmpty()) return@mapNotNull null
 
+            val translationFilesByBase = sttFiles
+                .filter { candidate ->
+                    val name = candidate.name.orEmpty()
+                    name.endsWith(".json") && name.contains(".translation-")
+                }
+                .groupBy { candidate ->
+                    candidate.name.orEmpty().substringBefore(".translation-")
+                }
+
             val chapters = transcriptFiles.mapIndexed { index, transcriptFile ->
                 val transcriptName = transcriptFile.name.orEmpty()
                 val baseName = transcriptName.substringBeforeLast(".json")
-                val translations = transcriptDir.listFiles()
-                    .filter { candidate ->
-                        candidate.isFile && candidate.name.orEmpty().startsWith("$baseName.translation-")
-                    }
-                    .associate { candidate ->
+                val translations = translationFilesByBase[baseName]
+                    ?.mapNotNull { candidate ->
                         val language = candidate.name.orEmpty()
                             .substringAfter(".translation-")
                             .substringBeforeLast(".json")
-                        language to candidate.uri
+                            .takeIf { it.isNotBlank() }
+                        language?.let { it to candidate.uri }
                     }
-                    .filterKeys { it.isNotBlank() }
+                    ?.toMap()
+                    ?: emptyMap()
 
                 BookChapterMeta(
                     index = index,
@@ -174,4 +188,21 @@ class LocalBookRepository @Inject constructor(
             )
         }
     }
+}
+
+private fun collectDocumentFiles(root: DocumentFile): List<DocumentFile> {
+    if (!root.isDirectory) return emptyList()
+    val files = mutableListOf<DocumentFile>()
+
+    fun traverse(current: DocumentFile) {
+        current.listFiles().forEach { child ->
+            when {
+                child.isDirectory -> traverse(child)
+                child.isFile -> files.add(child)
+            }
+        }
+    }
+
+    traverse(root)
+    return files
 }

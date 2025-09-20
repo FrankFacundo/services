@@ -45,8 +45,13 @@ fun LibraryRoute(
     val state by viewModel.state.collectAsState()
     val pickLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
-        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
-        context.contentResolver.takePersistableUriPermission(uri, flags)
+        val contentResolver = context.contentResolver
+        val readWriteFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        try {
+            contentResolver.takePersistableUriPermission(uri, readWriteFlags)
+        } catch (_: SecurityException) {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
         viewModel.onRootSelected(uri)
     }
 
