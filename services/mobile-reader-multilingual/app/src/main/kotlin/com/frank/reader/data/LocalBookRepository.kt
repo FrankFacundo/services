@@ -52,7 +52,10 @@ class LocalBookRepository @Inject constructor(
 
     override suspend fun loadBook(root: LibraryRoot, bookId: String): BookSummary? = when (root) {
         LibraryRoot.Demo -> sampleDataInstaller.sampleBook()
-        is LibraryRoot.DocumentTree -> scanDocumentRoot(root.uri).firstOrNull { it.id == bookId }
+        is LibraryRoot.DocumentTree -> {
+            val targetId = normalizeBookId(bookId)
+            scanDocumentRoot(root.uri).firstOrNull { normalizeBookId(it.id) == targetId }
+        }
     }
 
     override suspend fun loadChapter(
@@ -202,8 +205,10 @@ class LocalBookRepository @Inject constructor(
                 )
             }
 
+            val bookId = normalizeBookId(bookDir.uri.toString())
+
             BookSummary(
-                id = bookDir.uri.toString(),
+                id = bookId,
                 title = bookDir.name ?: "Book",
                 audio = AudioSource(audioFile.uri, mimeType = mimeType),
                 chapters = chapters,
@@ -211,6 +216,8 @@ class LocalBookRepository @Inject constructor(
             )
         }
     }
+
+    private fun normalizeBookId(raw: String): String = Uri.decode(raw)
 
     private fun resolveAudioInfo(file: DocumentFile): AudioInfo? {
         val retriever = MediaMetadataRetriever()
