@@ -1,0 +1,14 @@
+{
+  "source": "sample-whisper",
+  "chapterIndex": 0,
+  "start": 0.0,
+  "end": 15.0,
+  "duration": 15.0,
+  "text": "Demo chapter one transcript.",
+  "segments": [
+    { "id": 0, "seek": 0, "start": 0.0, "end": 3.5, "text": "Welcome to the multilingual reader demo." },
+    { "id": 1, "seek": 0, "start": 3.5, "end": 7.0, "text": "We keep the transcript and translation in sync." },
+    { "id": 2, "seek": 0, "start": 7.0, "end": 11.0, "text": "Tap a sentence to jump the audio playback instantly." },
+    { "id": 3, "seek": 0, "start": 11.0, "end": 15.0, "text": "Scrolling automatically centers the active line." }
+  ]
+}

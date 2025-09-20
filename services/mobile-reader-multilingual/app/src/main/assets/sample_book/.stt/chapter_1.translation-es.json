@@ -1,0 +1,12 @@
+{
+  "source": "sample-google",
+  "chapterIndex": 1,
+  "targetLanguage": "es",
+  "createdAt": "2024-04-20T00:00:00.000Z",
+  "segments": [
+    { "start": 0.0, "end": 4.2, "text": "El capítulo dos profundiza en la experiencia sincronizada.", "originalText": "Chapter two builds on the synchronized experience." },
+    { "start": 4.2, "end": 8.6, "text": "Los dispositivos plegables mantienen las transcripciones lado a lado.", "originalText": "Foldable devices keep transcripts side by side." },
+    { "start": 8.6, "end": 13.6, "text": "Los teléfonos pueden alternar entre modos apilados o enfocados.", "originalText": "Phones can toggle between stacked or focused modes." },
+    { "start": 13.6, "end": 18.5, "text": "Los datos se cargan directamente de archivos JSON en disco.", "originalText": "Data is loaded directly from disk backed JSON files." }
+  ]
+}

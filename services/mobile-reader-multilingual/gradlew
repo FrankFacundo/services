@@ -1,0 +1,46 @@
+#!/usr/bin/env sh
+
+# Copyright 2015 the original authors.
+
+# Gradle wrapper script for POSIX systems.
+
+APP_BASE_NAME=`basename "$0"`
+APP_HOME=`dirname "$0"`
+# Resolve symlinks.
+while [ -h "$APP_HOME/$APP_BASE_NAME" ]; do
+  ls=`ls -ld "$APP_HOME/$APP_BASE_NAME"`
+  link=`expr "$ls" : '.*-> \(.*\)$'`
+  if expr "$link" : '/.*' > /dev/null; then
+    APP_HOME=$link
+  else
+    APP_HOME="$APP_HOME/$link"
+  fi
+  APP_BASE_NAME=`basename "$APP_HOME"`
+  APP_HOME=`dirname "$APP_HOME"`
+done
+APP_HOME=`cd "$APP_HOME" && pwd`
+
+DEFAULT_JVM_OPTS=""
+
+JAVA_HOME=${JAVA_HOME:-}
+if [ -n "$JAVA_HOME" ] ; then
+  if [ -x "$JAVA_HOME/bin/java" ] ; then
+    JAVACMD="$JAVA_HOME/bin/java"
+  else
+    echo "ERROR: JAVA_HOME is set to an invalid directory." >&2
+    exit 1
+  fi
+else
+  JAVACMD=`which java`
+fi
+
+if [ ! -x "$JAVACMD" ] ; then
+  echo "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH." >&2
+  exit 1
+fi
+
+CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+
+exec "$JAVACMD" $DEFAULT_JVM_OPTS \
+  -classpath "$CLASSPATH" \
+  org.gradle.wrapper.GradleWrapperMain "$@"

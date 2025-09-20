@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dual Transcript Reader</string>
+    <string name="library_title">Library</string>
+    <string name="choose_root">Choose library folder</string>
+    <string name="use_demo_data">Use demo library</string>
+    <string name="last_listened">Resume last session</string>
+    <string name="chapters">Chapters</string>
+    <string name="translations">Translations</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="no_books_found">No books found in the selected folder.</string>
+    <string name="loading">Loading…</string>
+    <string name="settings">Settings</string>
+    <string name="layout_horizontal">Side by side</string>
+    <string name="layout_vertical">Top &amp; bottom</string>
+    <string name="layout_original">Original</string>
+    <string name="layout_translation">Translation</string>
+    <string name="layout_split">Split</string>
+    <string name="translation_missing">Translation unavailable</string>
+    <string name="language_selector_label">Language</string>
+    <string name="chapter_selector_label">Chapter</string>
+</resources>

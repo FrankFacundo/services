@@ -1,0 +1,12 @@
+{
+  "source": "sample-google",
+  "chapterIndex": 0,
+  "targetLanguage": "fr",
+  "createdAt": "2024-04-20T00:00:00.000Z",
+  "segments": [
+    { "start": 0.0, "end": 3.6, "text": "Bienvenue dans la démo du lecteur multilingue.", "originalText": "Welcome to the multilingual reader demo." },
+    { "start": 3.6, "end": 7.1, "text": "Nous gardons la transcription et la traduction synchronisées.", "originalText": "We keep the transcript and translation in sync." },
+    { "start": 7.1, "end": 11.1, "text": "Touchez une phrase pour déplacer immédiatement l'audio.", "originalText": "Tap a sentence to jump the audio playback instantly." },
+    { "start": 11.1, "end": 15.0, "text": "Le défilement recentre automatiquement la ligne active.", "originalText": "Scrolling automatically centers the active line." }
+  ]
+}

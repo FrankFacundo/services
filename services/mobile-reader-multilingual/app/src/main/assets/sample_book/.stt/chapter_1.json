@@ -1,0 +1,14 @@
+{
+  "source": "sample-whisper",
+  "chapterIndex": 1,
+  "start": 0.0,
+  "end": 18.5,
+  "duration": 18.5,
+  "text": "Demo chapter two transcript.",
+  "segments": [
+    { "id": 0, "seek": 0, "start": 0.0, "end": 4.0, "text": "Chapter two builds on the synchronized experience." },
+    { "id": 1, "seek": 0, "start": 4.0, "end": 8.5, "text": "Foldable devices keep transcripts side by side." },
+    { "id": 2, "seek": 0, "start": 8.5, "end": 13.5, "text": "Phones can toggle between stacked or focused modes." },
+    { "id": 3, "seek": 0, "start": 13.5, "end": 18.5, "text": "Data is loaded directly from disk backed JSON files." }
+  ]
+}
