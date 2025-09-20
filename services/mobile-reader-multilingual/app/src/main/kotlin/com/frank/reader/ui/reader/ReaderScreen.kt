@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,28 +13,35 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -42,6 +50,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
@@ -72,6 +81,7 @@ import androidx.window.layout.WindowLayoutInfo
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 val SegmentActiveKey = SemanticsPropertyKey<Boolean>("SegmentActive")
 var SemanticsPropertyReceiver.segmentActive by SegmentActiveKey
@@ -462,43 +472,24 @@ private fun PlaybackControls(
         }
     }
 
+    var showSpeedSheet by remember { mutableStateOf(false) }
+
+    if (showSpeedSheet) {
+        SpeedSettingsSheet(
+            currentSpeed = playbackSpeed,
+            options = playbackSpeedOptions,
+            onDismiss = { showSpeedSheet = false },
+            onSpeedSelected = { speed ->
+                onPlaybackSpeedSelected(speed)
+                showSpeedSheet = false
+            }
+        )
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
-        ) {
-            SkipControlButton(
-                modifier = Modifier,
-                label = "-${selectedSkipSeconds}s",
-                contentDescription = "Skip backward $selectedSkipSeconds seconds",
-                icon = Icons.Filled.FastRewind,
-                skipOptions = skipOptionsSeconds,
-                selectedSkipSeconds = selectedSkipSeconds,
-                onSkip = onSeekBackward,
-                onSkipOptionSelected = onSkipAmountSelected
-            )
-            IconButton(onClick = onTogglePlayPause) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Play"
-                )
-            }
-            SkipControlButton(
-                modifier = Modifier,
-                label = "+${selectedSkipSeconds}s",
-                contentDescription = "Skip forward $selectedSkipSeconds seconds",
-                icon = Icons.Filled.FastForward,
-                skipOptions = skipOptionsSeconds,
-                selectedSkipSeconds = selectedSkipSeconds,
-                onSkip = onSeekForward,
-                onSkipOptionSelected = onSkipAmountSelected
-            )
-        }
-
         Column {
             Slider(
                 value = sliderPosition,
@@ -520,69 +511,232 @@ private fun PlaybackControls(
             }
         }
 
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            playbackSpeedOptions.forEachIndexed { index, speed ->
-                SegmentedButton(
-                    selected = speed == playbackSpeed,
-                    onClick = { onPlaybackSpeedSelected(speed) },
-                    shape = SegmentedButtonDefaults.itemShape(index, playbackSpeedOptions.size)
-                ) {
-                    Text(speed.formatSpeedLabel())
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)
+        ) {
+            BookmarkButton()
+            SkipActionButton(
+                icon = Icons.Filled.FastRewind,
+                label = "-${selectedSkipSeconds}s",
+                contentDescription = "Skip backward $selectedSkipSeconds seconds",
+                skipOptions = skipOptionsSeconds,
+                selectedSkipSeconds = selectedSkipSeconds,
+                onSkip = onSeekBackward,
+                onSkipOptionSelected = onSkipAmountSelected
+            )
+            PlayControlButton(isPlaying = isPlaying, onTogglePlayPause = onTogglePlayPause)
+            SkipActionButton(
+                icon = Icons.Filled.FastForward,
+                label = "+${selectedSkipSeconds}s",
+                contentDescription = "Skip forward $selectedSkipSeconds seconds",
+                skipOptions = skipOptionsSeconds,
+                selectedSkipSeconds = selectedSkipSeconds,
+                onSkip = onSeekForward,
+                onSkipOptionSelected = onSkipAmountSelected
+            )
+            SpeedControlButton(
+                speedLabel = playbackSpeed.formatSpeedLabel(),
+                onClick = { showSpeedSheet = true }
+            )
+        }
+    }
+}
+
+@Composable
+private fun BookmarkButton() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            modifier = Modifier.size(48.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            tonalElevation = 1.dp
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(imageVector = Icons.Outlined.BookmarkBorder, contentDescription = "Bookmark")
             }
+        }
+        Text("Bookmark", style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun PlayControlButton(isPlaying: Boolean, onTogglePlayPause: () -> Unit) {
+    Surface(
+        modifier = Modifier.size(72.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        tonalElevation = 6.dp
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(role = Role.Button, onClick = onTogglePlayPause),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = if (isPlaying) "Pause" else "Play",
+                modifier = Modifier.size(32.dp)
+            )
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SkipControlButton(
-    modifier: Modifier = Modifier,
+private fun SkipActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     contentDescription: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     skipOptions: List<Int>,
     selectedSkipSeconds: Int,
     onSkip: () -> Unit,
     onSkipOptionSelected: (Int) -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    Box(modifier = modifier) {
-        Surface(
-            modifier = Modifier
-                .combinedClickable(
-                    role = Role.Button,
-                    onClick = onSkip,
-                    onLongClick = { menuExpanded = true }
-                )
-                .semantics { this.contentDescription = contentDescription },
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            tonalElevation = 2.dp
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box {
+            Surface(
+                modifier = Modifier
+                    .size(48.dp)
+                    .combinedClickable(
+                        role = Role.Button,
+                        onClick = onSkip,
+                        onLongClick = { menuExpanded = true }
+                    )
+                    .semantics { this.contentDescription = contentDescription },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                tonalElevation = 3.dp
             ) {
-                Icon(imageVector = icon, contentDescription = null)
-                Text(text = label, style = MaterialTheme.typography.labelLarge)
-                Icon(imageVector = Icons.Filled.ExpandMore, contentDescription = null)
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(imageVector = icon, contentDescription = null)
+                }
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                skipOptions.forEach { seconds ->
+                    DropdownMenuItem(
+                        text = { Text("$seconds seconds") },
+                        trailingIcon = if (seconds == selectedSkipSeconds) {
+                            { Icon(imageVector = Icons.Filled.Check, contentDescription = null) }
+                        } else null,
+                        onClick = {
+                            onSkipOptionSelected(seconds)
+                            menuExpanded = false
+                        }
+                    )
+                }
             }
         }
-        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            skipOptions.forEach { seconds ->
-                DropdownMenuItem(
-                    text = { Text("$seconds seconds") },
-                    trailingIcon = if (seconds == selectedSkipSeconds) {
-                        { Icon(imageVector = Icons.Filled.Check, contentDescription = null) }
-                    } else null,
-                    onClick = {
-                        onSkipOptionSelected(seconds)
-                        menuExpanded = false
+        Text(label, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun SpeedControlButton(speedLabel: String, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            modifier = Modifier
+                .size(48.dp)
+                .clickable(onClick = onClick, role = Role.Button),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            tonalElevation = 3.dp
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Text(speedLabel, style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        Text("Speed", style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SpeedSettingsSheet(
+    currentSpeed: Float,
+    options: List<Float>,
+    onDismiss: () -> Unit,
+    onSpeedSelected: (Float) -> Unit
+) {
+    val sortedOptions = remember(options) { options.distinct().sorted() }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val initialIndex = sortedOptions.indexOfFirst { it == currentSpeed }.takeIf { it >= 0 } ?: 0
+    var pendingIndex by remember(sortedOptions, currentSpeed) { mutableStateOf(initialIndex) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Text(
+                text = "Reading speed: ${sortedOptions[pendingIndex].formatSpeedLabel()}",
+                style = MaterialTheme.typography.headlineSmall
+            )
+
+            val sliderRange = 0f..sortedOptions.lastIndex.toFloat()
+            Slider(
+                value = pendingIndex.toFloat(),
+                onValueChange = { value ->
+                    val next = value.roundToInt().coerceIn(0, sortedOptions.lastIndex)
+                    pendingIndex = next
+                },
+                valueRange = sliderRange,
+                steps = 0
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                sortedOptions.forEachIndexed { index, option ->
+                    Text(
+                        text = option.formatSpeedLabel(),
+                        style = if (index == pendingIndex) MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold) else MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                sortedOptions.forEachIndexed { index, option ->
+                    val selected = index == pendingIndex
+                    FilledTonalButton(
+                        onClick = { pendingIndex = index },
+                        modifier = Modifier.size(64.dp),
+                        shape = CircleShape,
+                        colors = if (selected) {
+                            ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else ButtonDefaults.filledTonalButtonColors()
+                    ) {
+                        Text(option.formatSpeedLabel())
                     }
-                )
+                }
+            }
+
+            Button(
+                onClick = {
+                    onSpeedSelected(sortedOptions[pendingIndex])
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Save settings")
             }
         }
     }
