@@ -10,6 +10,8 @@ import com.frank.reader.model.BookSummary
 import com.frank.reader.model.ChapterContent
 import com.frank.reader.player.PlayerController
 import com.frank.reader.player.PlayerSnapshot
+import com.frank.reader.prefs.BookmarkRecord
+import com.frank.reader.prefs.BookmarkStore
 import com.frank.reader.prefs.LibraryRoot
 import com.frank.reader.prefs.ReaderPreferences
 import com.frank.reader.prefs.ReaderSettings
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 data class ReaderUiState(
     val isLoading: Boolean = true,
@@ -44,7 +47,9 @@ data class ReaderUiState(
     val skipOptionsSeconds: List<Int> = listOf(1, 3, 5, 10, 15, 20),
     val selectedSkipSeconds: Int = 15,
     val playbackSpeedOptions: List<Float> = listOf(0.75f, 1f, 1.25f, 1.5f, 2f),
-    val playbackSpeed: Float = 1f
+    val playbackSpeed: Float = 1f,
+    val bookmarks: List<BookmarkUiModel> = emptyList(),
+    val activeBookmarkId: String? = null
 )
 
 data class SegmentUiModel(
@@ -53,6 +58,18 @@ data class SegmentUiModel(
     val translationText: String?,
     val startMs: Long,
     val endMs: Long
+)
+
+data class BookmarkUiModel(
+    val id: String,
+    val chapterIndex: Int,
+    val chapterTitle: String,
+    val positionMs: Long,
+    val startMs: Long,
+    val endMs: Long?,
+    val segmentIndex: Int,
+    val snippet: String?,
+    val createdAtEpochMs: Long
 )
 
 enum class TranscriptPaneMode {
@@ -67,6 +84,7 @@ class ReaderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: TranscriptsRepository,
     private val preferences: ReaderPreferences,
+    private val bookmarkStore: BookmarkStore,
     private val playerController: PlayerController
 ) : ViewModel() {
 
@@ -82,6 +100,7 @@ class ReaderViewModel @Inject constructor(
     private val bookSummary = MutableStateFlow<BookSummary?>(null)
     private val chapterContent = MutableStateFlow<ChapterContent?>(null)
     private val rootFlow = MutableStateFlow<LibraryRoot?>(null)
+    private val bookmarkRecords = MutableStateFlow<List<BookmarkRecord>>(emptyList())
     private var lastSettings: ReaderSettings? = null
     private var resumeApplied = false
     private var segmentIndexFinder: SegmentIndexFinder? = null
@@ -89,6 +108,10 @@ class ReaderViewModel @Inject constructor(
     private var lastPreparedBookId: String? = null
     private var lastPreparedChapterIndex: Int? = null
     private var lastLoggedDurationMs: Long = -1L
+
+    private companion object {
+        private const val BOOKMARK_PROXIMITY_MS = 1_500L
+    }
 
     init {
         Log.d(
@@ -164,6 +187,14 @@ class ReaderViewModel @Inject constructor(
                 _uiState.update { it.copy(layoutPreference = preference) }
             }
         }
+
+        viewModelScope.launch {
+            bookmarkStore.bookmarks.collect { records ->
+                val filtered = records.filter { it.bookId == bookId }
+                bookmarkRecords.value = filtered
+                rebuildBookmarksUi()
+            }
+        }
     }
 
     private data class LoadRequest(
@@ -178,7 +209,14 @@ class ReaderViewModel @Inject constructor(
             "ReaderViewModel",
             "Loading chapter index=${request.chapterIndex} language=${request.language} root=${request.root}"
         )
-        _uiState.update { it.copy(isLoading = true, currentChapterIndex = request.chapterIndex) }
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                currentChapterIndex = request.chapterIndex,
+                bookmarks = emptyList(),
+                activeBookmarkId = null
+            )
+        }
         val chapter = repository.loadChapter(
             request.root,
             request.summary.id,
@@ -214,6 +252,8 @@ class ReaderViewModel @Inject constructor(
                 errorMessage = null
             )
         }
+
+        rebuildBookmarksUi()
 
         Log.d(
             "ReaderViewModel",
@@ -308,6 +348,7 @@ class ReaderViewModel @Inject constructor(
         }
         val finder = segmentIndexFinder
         val active = if (finder != null) finder.findActiveIndex(snapshot.positionMs) else -1
+        val matchedBookmarkId = findMatchingBookmarkId(snapshot.positionMs, chapterIndex.value)
         _uiState.update {
             it.copy(
                 playbackPositionMs = snapshot.positionMs,
@@ -315,7 +356,8 @@ class ReaderViewModel @Inject constructor(
                 bufferedPositionMs = snapshot.bufferedPositionMs,
                 isPlaying = snapshot.isPlaying,
                 playbackSpeed = snapshot.playbackSpeed,
-                activeSegmentIndex = active
+                activeSegmentIndex = active,
+                activeBookmarkId = matchedBookmarkId
             )
         }
 
@@ -386,6 +428,80 @@ class ReaderViewModel @Inject constructor(
         _uiState.update { it.copy(playbackSpeed = speed) }
     }
 
+    fun onToggleBookmark() {
+        val stateSnapshot = _uiState.value
+        val currentChapter = chapterIndex.value
+        val positionMs = stateSnapshot.playbackPositionMs
+        val segmentIdx = when {
+            stateSnapshot.activeSegmentIndex >= 0 -> stateSnapshot.activeSegmentIndex
+            else -> segmentIndexFinder?.findActiveIndex(positionMs) ?: -1
+        }
+
+        val existing = bookmarkRecords.value.firstOrNull { record ->
+            record.chapterIndex == currentChapter &&
+                (
+                    (segmentIdx >= 0 && record.segmentIndex >= 0 && record.segmentIndex == segmentIdx) ||
+                        abs(record.positionMs - positionMs) <= BOOKMARK_PROXIMITY_MS
+                    )
+        }
+
+        viewModelScope.launch {
+            if (existing != null) {
+                Log.d(
+                    "ReaderViewModel",
+                    "Removing bookmark id=${existing.id} chapter=${existing.chapterIndex} position=${existing.positionMs}"
+                )
+                bookmarkStore.delete(existing.id)
+            } else {
+                val now = System.currentTimeMillis()
+                val generatedId = buildString {
+                    append(bookId)
+                    append('#')
+                    append(currentChapter)
+                    append('#')
+                    append(now)
+                }
+                val record = BookmarkRecord(
+                    id = generatedId,
+                    bookId = bookId,
+                    chapterIndex = currentChapter,
+                    positionMs = positionMs,
+                    segmentIndex = segmentIdx,
+                    createdAtEpochMs = now
+                )
+                Log.d(
+                    "ReaderViewModel",
+                    "Adding bookmark id=$generatedId chapter=$currentChapter segment=$segmentIdx position=$positionMs"
+                )
+                bookmarkStore.upsert(record)
+            }
+        }
+    }
+
+    fun onBookmarkSelected(bookmarkId: String) {
+        val record = bookmarkRecords.value.firstOrNull { it.id == bookmarkId }
+        if (record == null) {
+            Log.w("ReaderViewModel", "Bookmark not found id=$bookmarkId")
+            return
+        }
+        if (record.chapterIndex != chapterIndex.value) {
+            Log.w(
+                "ReaderViewModel",
+                "Bookmark chapter mismatch selected=${record.chapterIndex} current=${chapterIndex.value}"
+            )
+            return
+        }
+        Log.d("ReaderViewModel", "Seeking to bookmark id=$bookmarkId position=${record.positionMs}")
+        playerController.seekTo(record.positionMs)
+    }
+
+    fun onBookmarkRemoved(bookmarkId: String) {
+        viewModelScope.launch {
+            Log.d("ReaderViewModel", "Removing bookmark id=$bookmarkId via sheet action")
+            bookmarkStore.delete(bookmarkId)
+        }
+    }
+
     fun onSegmentTapped(index: Int) {
         Log.d("ReaderViewModel", "onSegmentTapped index=$index")
         uiState.value.segments.getOrNull(index)?.let { playerController.seekTo(it.startMs) }
@@ -409,5 +525,60 @@ class ReaderViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         saveJob?.cancel()
+    }
+
+    private fun rebuildBookmarksUi() {
+        val stateSnapshot = _uiState.value
+        val currentChapter = chapterIndex.value
+        val chapterTitle = stateSnapshot.chapterTitles.getOrNull(currentChapter)
+            ?: "Chapter ${currentChapter + 1}"
+        val relevant = bookmarkRecords.value.filter { it.chapterIndex == currentChapter }
+        val segments = stateSnapshot.segments
+
+        val models = relevant.map { record ->
+            val segment = segments.getOrNull(record.segmentIndex)
+            val startMs = segment?.startMs ?: record.positionMs
+            val endMs = segment?.endMs?.takeIf { it > startMs }
+            BookmarkUiModel(
+                id = record.id,
+                chapterIndex = record.chapterIndex,
+                chapterTitle = chapterTitle,
+                positionMs = record.positionMs,
+                startMs = startMs,
+                endMs = endMs,
+                segmentIndex = record.segmentIndex,
+                snippet = record.segmentIndex.takeIf { it >= 0 }?.let { index ->
+                    segments.getOrNull(index)?.transcriptText?.toSnippet()
+                },
+                createdAtEpochMs = record.createdAtEpochMs
+            )
+        }.sortedBy { it.positionMs }
+
+        val activeBookmarkId = findMatchingBookmarkId(stateSnapshot.playbackPositionMs, currentChapter)
+
+        _uiState.update {
+            it.copy(
+                bookmarks = models,
+                activeBookmarkId = activeBookmarkId
+            )
+        }
+    }
+
+    private fun findMatchingBookmarkId(positionMs: Long, chapterIdx: Int): String? =
+        bookmarkRecords.value
+            .filter { it.chapterIndex == chapterIdx }
+            .firstOrNull { record ->
+                abs(record.positionMs - positionMs) <= BOOKMARK_PROXIMITY_MS
+            }
+            ?.id
+
+    private fun String.toSnippet(maxChars: Int = 120): String {
+        val sanitized = replace('\n', ' ').trim()
+        if (sanitized.isEmpty()) return sanitized
+        return if (sanitized.length <= maxChars) {
+            sanitized
+        } else {
+            sanitized.take(maxChars).trimEnd() + "…"
+        }
     }
 }

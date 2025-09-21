@@ -9,6 +9,7 @@ import com.frank.reader.data.LocalBookRepository
 import com.frank.reader.data.TranscriptsRepository
 import com.frank.reader.data.sample.SampleDataInstaller
 import com.frank.reader.player.PlayerController
+import com.frank.reader.prefs.BookmarkStore
 import com.frank.reader.prefs.ReaderPreferences
 import dagger.Module
 import dagger.Provides
@@ -43,6 +44,11 @@ object AppModule {
     @Singleton
     fun provideReaderPreferences(dataStore: DataStore<Preferences>): ReaderPreferences =
         ReaderPreferences(dataStore)
+
+    @Provides
+    @Singleton
+    fun provideBookmarkStore(dataStore: DataStore<Preferences>, json: Json): BookmarkStore =
+        BookmarkStore(dataStore, json)
 
     @Provides
     @Singleton
