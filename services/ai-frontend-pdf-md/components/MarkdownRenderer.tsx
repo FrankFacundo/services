@@ -17,12 +17,30 @@ export default function MarkdownRenderer({ content, mdRelPath }: { content: stri
           img({ node, src, alt, ...props }) {
             const finalSrc = src ? resolveImageToApi(mdRelPath, src) : undefined;
             return (
-              <figure>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={finalSrc} alt={alt || ''} className="max-w-full h-auto" />
-                {alt && <figcaption className="text-xs text-gray-500">{alt}</figcaption>}
-              </figure>
+              // Keep image as phrasing content so inline images remain valid in paragraphs.
+              // Figure/figcaption wrapping is handled at paragraph level for image-only blocks.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={finalSrc} alt={alt || ''} className="max-w-full h-auto" {...props} />
             );
+          },
+          p({ node, children, ...props }) {
+            const n: any = node;
+            const first = n?.children?.[0];
+            const hasSingleImageChild = Array.isArray(n?.children) && n.children.length === 1 && first?.tagName === 'img';
+            if (hasSingleImageChild) {
+              const rawSrc = typeof first?.properties?.src === 'string' ? first.properties.src : undefined;
+              const alt = typeof first?.properties?.alt === 'string' ? first.properties.alt : '';
+              const title = typeof first?.properties?.title === 'string' ? first.properties.title : undefined;
+              const finalSrc = rawSrc ? resolveImageToApi(mdRelPath, rawSrc) : undefined;
+              return (
+                <figure>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={finalSrc} alt={alt} title={title} className="max-w-full h-auto" />
+                  {alt && <figcaption className="text-xs text-gray-500">{alt}</figcaption>}
+                </figure>
+              );
+            }
+            return <p {...props}>{children}</p>;
           },
           h1({ node, children, ...props }) { const text = String(children as any); const id = slugify(text); return <h1 id={id} {...props}>{children}</h1>; },
           h2({ node, children, ...props }) { const text = String(children as any); const id = slugify(text); return <h2 id={id} {...props}>{children}</h2>; },
