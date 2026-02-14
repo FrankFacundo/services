@@ -84,7 +84,16 @@ export default function ImagesPanel({
         body: JSON.stringify({ path: rel }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Generation failed");
+      if (!res.ok) {
+        const msg = [
+          data?.error || "Generation failed",
+          data?.model ? `model=${data.model}` : null,
+          data?.details ? `details=${data.details}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        throw new Error(msg);
+      }
       const mime = data?.mimeType || "image/png";
       const b64 = data?.data;
       const dataUrl = b64 ? `data:${mime};base64,${b64}` : undefined;

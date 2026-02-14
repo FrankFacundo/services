@@ -42,8 +42,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing path" }, { status: 400 });
     const prompt =
       body?.prompt ||
-      // "Remove the watermark from this image and restore the background so it looks clean and uniform. Keep all the original text, numbers, symbols, and map details unchanged. Ensure the image remains sharp and clear without losing any of the original information.";
-      "Remove the watermark from this image. This is for a test of my work.";
+      "Enhance this image for clarity and readability while preserving all visible text, numbers, symbols, and map details.";
 
     const API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!API_KEY)
@@ -52,7 +51,9 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
 
-    const MODEL = "gemini-2.5-flash-image-preview";
+    const modelFromEnv =
+      process.env.GEMINI_MODEL || "gemini-2.5-flash-image";
+    const MODEL = modelFromEnv.replace(/^models\//, "");
     const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
     const root = getDocsRoot();
@@ -68,6 +69,10 @@ export async function POST(req: NextRequest) {
           parts: [{ text: prompt }, { inlineData: { mimeType, data: b64 } }],
         },
       ],
+      generationConfig: {
+        // Ask for image output explicitly; some models default to text-first output.
+        responseModalities: ["IMAGE", "TEXT"],
+      },
     } as any;
 
     const resp = await fetch(URL, {
@@ -81,8 +86,25 @@ export async function POST(req: NextRequest) {
     });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
+      let parsed: any = null;
+      try {
+        parsed = txt ? JSON.parse(txt) : null;
+      } catch {}
+      const upstreamMessage =
+        parsed?.error?.message || parsed?.message || undefined;
+      console.error("Gemini upstream error", {
+        status: resp.status,
+        model: MODEL,
+        url: URL,
+        upstreamMessage,
+      });
       return NextResponse.json(
-        { error: `Gemini error: ${resp.status}`, details: txt },
+        {
+          error: `Gemini error: ${resp.status}`,
+          details: upstreamMessage || txt,
+          model: MODEL,
+          endpoint: URL,
+        },
         { status: 502 }
       );
     }
@@ -95,30 +117,45 @@ export async function POST(req: NextRequest) {
         { status: 502 }
       );
     }
-    const cand = candidates[0];
-    if (!cand?.content) {
-      const finishReason = cand?.finishReason ?? "UNKNOWN";
-      return NextResponse.json(
-        { error: `Generation failed/blocked (finishReason=${finishReason}).` },
-        { status: 502 }
-      );
-    }
-    const parts = cand.content?.parts || [];
+
     let outB64: string | null = null;
     let outMime: string | null = null;
-    for (const p of parts) {
-      if (p?.text) {
-        console.log(p.text);
+    const textOutputs: string[] = [];
+    const finishReasons: string[] = [];
+
+    for (const cand of candidates) {
+      finishReasons.push(cand?.finishReason ?? "UNKNOWN");
+      const parts = cand?.content?.parts || [];
+      for (const p of parts) {
+        if (typeof p?.text === "string" && p.text.trim()) {
+          textOutputs.push(p.text.trim());
+        }
+        const inline = p?.inlineData || p?.inline_data;
+        if (inline?.data) {
+          outB64 = inline.data;
+          outMime = inline.mimeType || inline.mime_type || "image/png";
+          break;
+        }
       }
-      if (p?.inlineData?.data) {
-        outB64 = p.inlineData.data;
-        outMime = p.inlineData.mimeType || "image/png";
-        break;
-      }
+      if (outB64) break;
     }
+
     if (!outB64) {
+      const details =
+        textOutputs[0]?.slice(0, 500) ||
+        `No inline image data. finishReason=${finishReasons.join(",")}`;
+      console.warn("Gemini returned no image bytes", {
+        model: MODEL,
+        finishReasons,
+        details,
+      });
       return NextResponse.json(
-        { error: "Gemini did not return image bytes." },
+        {
+          error: "Gemini did not return image bytes.",
+          details,
+          finishReasons,
+          model: MODEL,
+        },
         { status: 502 }
       );
     }
@@ -127,6 +164,13 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (e: any) {
-    return NextResponse.json({ error: "Bad request" }, { status: 400 });
+    console.error("Gemini generate route failed", {
+      message: e?.message,
+      stack: e?.stack,
+    });
+    return NextResponse.json(
+      { error: e?.message || "Internal server error" },
+      { status: 500 }
+    );
   }
 }
