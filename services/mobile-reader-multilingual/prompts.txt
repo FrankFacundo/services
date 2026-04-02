@@ -1,0 +1,43 @@
+Actúa como un motor avanzado de OCR y procesamiento de documentos. Tu tarea es analizar el archivo PDF adjunto y extraer todo su contenido para generar de salida ÚNICAMENTE un objeto JSON estructurado, siguiendo reglas estrictas de formato.
+
+### REGLAS DE EXTRACCIÓN:
+1. **Paginación:** Debes analizar el documento página por página. El índice (`index`) debe comenzar en 0.
+2. **Formato de Texto (Markdown):** Todo el texto extraído debe formatearse fielmente en Markdown dentro de la clave `markdown`.
+   - Preserva la jerarquía de títulos usando `#`, `##`, `###`, etc.
+   - Mantén las listas, negritas, cursivas y tablas en sintaxis Markdown estándar.
+3. **Fórmulas y Matemáticas:** Cualquier ecuación o símbolo matemático debe transcribirse usando la sintaxis de LaTeX encerrada entre signos de dólar (por ejemplo, `$x^2 + y^2$` o `$$...$$` para bloques).
+4. **Tratamiento de Imágenes:** - Cada vez que encuentres una imagen, gráfico, diagrama o ilustración en el texto, inserta un marcador en la cadena markdown con el formato: `![img-X.jpeg](img-X.jpeg)`, donde `X` es un identificador secuencial global para todo el documento.
+   - En el arreglo `images` de esa página, debes detallar cada imagen encontrada con su identificador exacto (`id`) y las coordenadas de su caja delimitadora en píxeles (`top_left_x`, `top_left_y`, `bottom_right_x`, `bottom_right_y`). Si la página no tiene imágenes, el arreglo debe quedar vacío `[]`.
+5. **Dimensiones:** Para cada página, infiere y proporciona sus dimensiones en píxeles (`dpi`, `height`, `width`) dentro de la clave `dimensions`.
+6. **Metadatos Finales:** Al final del JSON, incluye el modelo utilizado (`model`) y un objeto `usage_info` con el número total de páginas procesadas y el peso aproximado del documento en bytes.
+
+### ESTRUCTURA JSON ESPERADA:
+Devuelve SOLO código JSON válido. No envuelvas la respuesta en texto conversacional. Utiliza exactamente el siguiente esquema:
+
+{
+    "pages": [
+        {
+            "index": 0,
+            "markdown": "# Título principal\n\nTexto del documento...\n\n![img-0.jpeg](img-0.jpeg)",
+            "images": [
+                {
+                    "id": "img-0.jpeg",
+                    "top_left_x": 100,
+                    "top_left_y": 150,
+                    "bottom_right_x": 500,
+                    "bottom_right_y": 450
+                }
+            ],
+            "dimensions": {
+                "dpi": 200,
+                "height": 1709,
+                "width": 1300
+            }
+        }
+    ],
+    "model": "nombre-del-modelo-llm",
+    "usage_info": {
+        "pages_processed": 1,
+        "doc_size_bytes": 102400
+    }
+}

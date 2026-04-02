@@ -26,6 +26,61 @@ An Android (Kotlin, Jetpack Compose) audiobook reader that mirrors ElevenLabs' t
 2. Use **Run ▶️** to deploy to an emulator (API 24+) or device.
 3. On first launch the library view shows the bundled demo book automatically; tap into it to experience the dual transcript reader.
 
+## Exporting an APK
+The most reliable way in this repo is Android Studio, since that is how the project was previously exported.
+
+### Android Studio
+1. Open `services/mobile-reader-multilingual` in Android Studio.
+2. Wait for Gradle sync to finish.
+3. Use **Build > Build Bundle(s) / APK(s) > Build APK(s)** for a debug APK.
+4. Or use **Build > Generate Signed Bundle / APK** if you want a signed release APK.
+5. When the build finishes, click the notification link from Android Studio or open:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+For a signed release build generated from the wizard, the APK is typically placed under:
+
+```text
+app/build/outputs/apk/release/
+```
+
+### Command line
+Run these commands from the project root (`services/mobile-reader-multilingual`).
+
+### Debug APK
+Use this when you want a quick installable APK for local testing:
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+The APK is written to:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Release APK
+Build the optimized release variant with:
+
+```bash
+./gradlew :app:assembleRelease
+```
+
+The output path is:
+
+```text
+app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+Notes:
+- The project targets Java 17.
+- The debug APK is signed with the default debug keystore and is the easiest option for local installs.
+- The release APK is unsigned in this repo because no release signing config is defined in `app/build.gradle.kts`. To distribute it, configure a keystore there or use **Build > Generate Signed Bundle / APK** in Android Studio.
+- If `./gradlew` fails with `Could not find or load main class org.gradle.wrapper.GradleWrapperMain`, the repo is missing `gradle/wrapper/gradle-wrapper.jar`.
+
 ### Pointing to Real Audiobooks
 1. Organize filesystem as:
    ```
